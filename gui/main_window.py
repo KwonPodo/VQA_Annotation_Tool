@@ -130,7 +130,7 @@ class VideoCanvas(QLabel):
         """Enable bbox annotation mode"""
         self.bbox_mode = True
         self.available_objects = available_objects
-        self.set_Cursor(Qt.CrossCursor)
+        self.setCursor(Qt.CrossCursor)
         print(f'BBox mode enabled for {available_objects}')
     
     def disable_bbox_mode(self):
@@ -182,9 +182,15 @@ class VideoCanvas(QLabel):
         """Show annotation dialog for bounding box"""
         from gui.bbox_dialog import BBoxAnnotationDialog
         
+        # Collect track_ids used in current frame
+        current_frame_track_ids = []
+        if self.current_frame in self.frame_bboxes:
+            current_frame_track_ids = [bbox['track_id'] for bbox in self.frame_bboxes[self.current_frame]]
+        
         dialog = BBoxAnnotationDialog(
             available_objects=self.available_objects,
             existing_track_ids=self.existing_track_ids.copy(),
+            current_frame_track_ids=current_frame_track_ids,  # Pass current frame track_ids
             parent=self
         )
         
@@ -371,7 +377,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Video QA Annotation Tool")
-        self.setGeometry(100, 100, 1200, 400)
+        self.setGeometry(100, 100, 1400, 700)
 
         # Annotation State
         self.current_annotation = None
@@ -380,6 +386,16 @@ class MainWindow(QMainWindow):
 
         # Navigation mode : 'frame' or 'segment'
         self.navigation_mode = "frame"
+
+        # Bbox Annotation State
+        self.bbox_annotation_active = False
+        self.selected_objects_for_bbox = []
+
+        # Current Video and Annotation Data
+        self.current_video_name = None
+        self.current_annotation_data = None
+        self.saved_annotations = {}
+
 
         # Setup
         self.setup_ui()
@@ -520,23 +536,49 @@ class MainWindow(QMainWindow):
         self.qa_panel = QAPanel()
 
         # Action buttons
-        action_group = QGroupBox("Actions")
+        action_group = QGroupBox("Annotation Controls")
         action_layout = QVBoxLayout(action_group)
 
-        self.start_annotation_btn = QPushButton("Start New Annotation")
-        self.finish_annotation_btn = QPushButton("Finish Current Annotation")
-        self.reset_annotation_btn = QPushButton("Reset Annotation")
+        # Status Label
+        self.annotation_status_label = QLabel("Load video and select objects to start annotation")
+        self.annotation_status_label.setStyleSheet(
+            "color: #666; font-style: italic; padding: 5px; "
+            "border: 1px solid #ddd; border-radius: 3px;"
+        )
 
-        # Initially disable some buttons
-        self.finish_annotation_btn.setEnabled(False)
-        self.reset_annotation_btn.setEnabled(False)
+        # Main Buttons
+        main_button_layout = QHBoxLayout()
+        self.start_annotation_btn = QPushButton("Start Annotation")
+        main_button_layout.addWidget(self.start_annotation_btn)
+        main_button_layout.addWidget(self.save_annotation_btn)
+
+        # Bbox Annotation Buttons
+        bbox_layout = QHBoxLayout()
+        self.start_bbox_btn = QPushButton("Start BBox Mode")
+        self.stop_bbox_btn = QPushButton("Stop BBox Mode")
+        bbox_layout.addWidget(self.start_bbox_btn)
+        bbox_layout.addWidget(self.stop_bbox_btn)
+
+        # BBox Edit Buttons
+        edit_layout = QHBoxLayout()
+        self.undo_bbox_btn = QPushButton("Undo Last BBox")
+        self.clear_frame_btn = QPushButton("Clear Frame")
+        edit_layout.addWidget(self.undo_bbox_btn)
+        edit_layout.addWidget(self.clear_frame_btn)
+
+        # Initial Disable
+        self.start_annotation_btn.setEnabled(False)
         self.save_annotation_btn.setEnabled(False)
+        self.start_bbox_btn.setEnabled(False)
+        self.stop_bbox_btn.setEnabled(False)
+        self.undo_bbox_btn.setEnabled(False)
+        self.clear_frame_btn.setEnabled(False)
 
-        action_layout.addWidget(self.start_annotation_btn)
-        action_layout.addWidget(self.finish_annotation_btn)
-        action_layout.addWidget(self.reset_annotation_btn)
+        action_layout.addWidget(self.annotation_status_label)
+        action_layout.addLayout(main_button_layout)
+        action_layout.addLayout(bbox_layout)
+        action_layout.addLayout(edit_layout)
 
-        # Add to layout
         layout.addLayout(top_row_layout)
         layout.addWidget(self.qa_panel)
         layout.addWidget(action_group)
@@ -569,8 +611,15 @@ class MainWindow(QMainWindow):
 
         # Action buttons
         self.start_annotation_btn.clicked.connect(self.start_annotation)
-        self.finish_annotation_btn.clicked.connect(self.finish_annotation)
-        self.reset_annotation_btn.clicked.connect(self.reset_annotation)
+
+        # BBox Annotation Buttons
+        self.start_bbox_btn.clicked.connect(self.start_bbox_annotation)
+        self.stop_bbox_btn.clicked.connect(self.stop_bbox_annotation)
+        self.undo_bbox_btn.clicked.connect(self.undo_last_bbox)
+        self.clear_frame_btn.clicked.connect(self.clear_current_frame)
+
+        # Object Panel selection change detector
+        self.object_panel.connect_selection_changed(self.on_object_selection_changed)
 
         # SpinBox Focus
         self.frame_step_input.editingFinished.connect(lambda: self.setFocus())
@@ -608,15 +657,19 @@ class MainWindow(QMainWindow):
 
         if file_path:
             if self.video_canvas.load_video(file_path):
+                self.current_video_name = os.path.splitext(os.path.basename(file_path))[0]
                 print(f"Successfully loaded video: {file_path}")
+                print(f'Video loaded: {self.current_video_name}')
+
                 self.update_frame_info()
-                self.start_annotation_btn.setEnabled(True)
 
                 # Update annotation panel with video info
                 self.annotation_panel.set_video_info(self.video_canvas.total_frames)
 
                 # Reset annotation state
                 self.reset_annotation_state()
+
+                self.update_annotation_status(f"Video loaded: {self.current_video_name}")
             else:
                 print(f"Failed to load video: {file_path}")
 
@@ -636,9 +689,18 @@ class MainWindow(QMainWindow):
         self.current_segment_index = 0
         self.prev_segment_btn.setEnabled(False)
         self.next_segment_btn.setEnabled(False)
-        self.finish_annotation_btn.setEnabled(False)
-        self.reset_annotation_btn.setEnabled(False)
+
+        self.current_annotation_data = None
+        self.bbox_annotation_active = False
+        self.selected_objects_for_bbox = []
+
+        # Reset Button State
+        self.start_annotation_btn.setEnabled(False)
         self.save_annotation_btn.setEnabled(False)
+        self.start_bbox_btn.setEnabled(False)
+        self.stop_bbox_btn.setEnabled(False)
+        self.undo_bbox_btn.setEnabled(False)
+        self.clear_frame_btn.setEnabled(False)
 
     def enable_segment_navigation(self, sampled_frames):
         """Enable segment navigation with sampled frames"""
@@ -715,35 +777,6 @@ class MainWindow(QMainWindow):
                 f"Navigated to segment {self.current_segment_index + 1} of {len(self.sampled_frames)} (frame {frame_num})"
             )
 
-    def start_annotation(self):
-        """Start new annotation"""
-        print("Starting new annotation")
-        self.finish_annotation_btn.setEnabled(True)
-        self.reset_annotation_btn.setEnabled(True)
-        self.save_annotation_btn.setEnabled(True)
-        # TODO: This will be called after time segment is selected and objects are chosen
-        # For now, simulate uniform sampling (example: every 10th frames)
-        if self.video_canvas.video_cap:
-            # Example: sample every 10 frames from frame 100 to 200
-            start_frame = 100
-            end_frame = min(200, self.video_canvas.total_frames - 1)
-            sample_interval = 10
-
-            sampled = list(range(start_frame, end_frame + 1, sample_interval))
-            self.enable_segment_navigation(sampled)
-
-    def finish_annotation(self):
-        """Finish current annotation"""
-        print("Finishing annotation")
-        self.finish_annotation_btn.setEnabled(False)
-        self.reset_annotation_btn.setEnabled(False)
-        # TODO: Implement annotation completion
-
-    def reset_annotation(self):
-        """Reset current annotation"""
-        print("Resetting annotation")
-        # TODO: Implement annotation reset
-
     def apply_time_segment(self):
         """Apply time segment and create uniform sampling"""
         segment_info = self.annotation_panel.get_segment_info()
@@ -790,6 +823,9 @@ class MainWindow(QMainWindow):
         # Change keyboard focus to main window
         self.setFocus()
 
+        # Update Butto State
+        self.on_object_selection_changed()
+
         print(f"Applied time segment: {start_frame}-{end_frame}, interval: {interval}")
         print(f"Sampled frames: {sampled_frames}")
 
@@ -807,6 +843,9 @@ class MainWindow(QMainWindow):
         self.annotation_panel.update_segment_info([])
 
         self.setFocus()
+
+        # Update Button State
+        self.on_object_selection_changed()
 
         print("Undo time segment sampling - return to frame navigation mode")
 
@@ -833,3 +872,200 @@ class MainWindow(QMainWindow):
             self.next_segment()
         else:
             self.next_frame()
+
+    def start_annotation(self):
+        """Start Annotation (If current annotation is ongoing, ask for confirmation)"""
+        # Check if there is ongoing annotation
+        if self.current_annotation_data is not None or self.video_canvas.frame_bboxes:
+            total_bboxes = sum(len(bboxes) for bboxes in self.video_canvas.frame_bboxes.values())
+            if total_bboxes > 0:
+                result = QMessageBox.question(self, "Start New Annotation", 
+                                            f"Current annotation has {total_bboxes} bounding boxes.\n"
+                                            f"Start new annotation? (Current work will be lost)",
+                                            QMessageBox.Yes | QMessageBox.No)
+                if result == QMessageBox.No:
+                    return
+        
+        # Check required conditions
+        if not self.current_video_name:
+            QMessageBox.warning(self, "No Video", "Please load a video first.")
+            return
+            
+        selected_objects = self.object_panel.get_selected_objects()
+        if not selected_objects:
+            QMessageBox.warning(self, "No Objects", "Please select objects first.")
+            return
+            
+        if not self.sampled_frames:
+            QMessageBox.warning(self, "No Time Segment", "Please apply time segment first.")
+            return
+
+        # Start new annotation
+        self.current_annotation_data = {
+            "video_info": {
+                "filename": self.current_video_name,
+                "total_frames": self.video_canvas.total_frames,
+                "fps": self.video_canvas.fps
+            },
+            "time_segment": {
+                "start_frame": self.sampled_frames[0] if self.sampled_frames else 0,
+                "end_frame": self.sampled_frames[-1] if self.sampled_frames else 0,
+                "interval": self.annotation_panel.get_segment_info()["interval"],
+                "sampled_frames": self.sampled_frames.copy()
+            },
+            "selected_objects": selected_objects.copy(),
+            "annotations": {},
+            "qa_data": None
+        }
+
+        # Initialize BBox data
+        self.video_canvas.frame_bboxes = {}
+        self.video_canvas.existing_track_ids = {}
+        self.video_canvas.track_registry = {}
+        self.video_canvas.color_index = 0
+
+        # Update UI state
+        self.start_bbox_btn.setEnabled(True)
+        self.update_annotation_status(f"Annotation started: {', '.join(selected_objects)}")
+        
+        print(f"Started annotation for {self.current_video_name}")
+        print(f"Objects: {selected_objects}")
+
+    def update_annotation_status(self, message):
+        """Update annotation status label"""
+        self.annotation_status_label.setText(message)
+
+    def on_object_selection_changed(self):
+        """Call when Object Panel selection changes"""
+        selected_objects = self.object_panel.get_selected_objects()
+
+        # Start button activation conditions
+        has_video = self.current_video_name is not None
+        has_objects = len(selected_objects) > 0
+        has_segments = len(self.sampled_frames) > 0
+        
+        self.start_annotation_btn.setEnabled(has_video and has_objects and has_segments)
+        
+        # Status message
+        if not has_video:
+            self.update_annotation_status("Load video first")
+        elif not has_objects:
+            self.update_annotation_status("Select objects to continue")
+        elif not has_segments:
+            self.update_annotation_status("Apply time segment to continue")
+        elif self.current_annotation_data is not None:
+            current_objects = set(self.current_annotation_data["selected_objects"])
+            new_objects = set(selected_objects)
+            
+            if current_objects == new_objects:
+                self.update_annotation_status(f"In progress: {', '.join(selected_objects)}")
+                self.start_annotation_btn.setText('Start Annotation')
+            else:
+                current_str = ', '.join(sorted(current_objects))
+                new_str = ', '.join(sorted(new_objects))
+                self.update_annotation_status(f"Current: {current_str} → Click to restart with: {new_str}")
+                self.start_annotation_btn.setText('Restart Annotation')
+        else:
+            self.update_annotation_status(f"Ready to start: {', '.join(selected_objects)}")
+            self.start_annotation_btn.setText('Start Annotation')
+
+    def start_bbox_annotation(self):
+        """Start Bbox Annotation"""
+        selected_objects = self.object_panel.get_selected_objects()
+        
+        if not selected_objects:
+            QMessageBox.warning(self, "No Objects Selected", 
+                                "Please select at least one object type before starting annotation.")
+            return
+        
+        if not self.sampled_frames:
+            QMessageBox.warning(self, "No Time Segment", 
+                                "Please apply time segment first before starting annotation.")
+            return
+        
+        # Activate Bbox Annotation Mode
+        self.bbox_annotation_active = True
+        self.selected_objects_for_bbox = selected_objects.copy()
+        
+        # Activate Bbox Annotation Mode on Video Canvas
+        self.video_canvas.enable_bbox_mode(self.selected_objects_for_bbox)
+        
+        # Move to first segment frame
+        if self.sampled_frames:
+            self.current_segment_index = 0
+            self.video_canvas.set_frame(self.sampled_frames[0])
+            self.update_frame_info()
+            
+            # Change to segment mode
+            self.set_navigation_mode("segment")
+        
+        # Update button states
+        self.start_bbox_btn.setEnabled(False)
+        self.stop_bbox_btn.setEnabled(True)
+        self.undo_bbox_btn.setEnabled(True)
+        self.clear_frame_btn.setEnabled(True)
+        
+        # 객체 선택 비활성화 (어노테이션 중에는 변경 불가)
+        self.object_panel.setEnabled(False)
+        
+        print(f"Started bbox annotation for objects: {self.selected_objects_for_bbox}")
+        print(f"Annotation will be done on {len(self.sampled_frames)} frames")
+
+    def stop_bbox_annotation(self):
+        """End Bbox Annotation"""
+        if not self.bbox_annotation_active:
+            return
+        
+        # Save bbox data to current annotation
+        if self.current_annotation_data:
+            self.current_annotation_data["annotations"] = self.video_canvas.get_all_annotations()
+        
+        # Deactivate Bbox Annotation Mode
+        self.bbox_annotation_active = False
+        self.video_canvas.disable_bbox_mode()
+
+        # Update UI State
+        self.start_bbox_btn.setEnabled(True)
+        self.stop_bbox_btn.setEnabled(False)
+        self.undo_bbox_btn.setEnabled(False)
+        self.clear_frame_btn.setEnabled(False)
+
+        # Activate Object Selection
+        self.object_panel.setEnabled(True)
+
+        # Update Status
+        annotated_frames = len(self.video_canvas.frame_bboxes)
+        total_frames = len(self.sampled_frames)
+        self.update_annotation_status(f"BBox Completed: {annotated_frames}/{total_frames} frames")
+
+        print(f"BBox Annotation Completed: {annotated_frames}/{total_frames} frames")
+
+    def undo_last_bbox(self):
+        """Remove last bbox on current frame"""
+        if not self.bbox_annotation_active:
+            return
+        
+        if self.video_canvas.undo_last_bbox():
+            print(f"Undid last bbox on frame {self.video_canvas.current_frame}")
+        else:
+            QMessageBox.information(self, "No BBox", "No bounding boxes to undo on current frame.")
+
+    def clear_current_frame(self):
+        """Remove all bboxes on current frame"""
+        if not self.bbox_annotation_active:
+            return
+        
+        current_frame = self.video_canvas.current_frame
+        bbox_count = len(self.video_canvas.frame_bboxes.get(current_frame, []))
+        
+        if bbox_count == 0:
+            QMessageBox.information(self, "No BBoxes", "No bounding boxes to clear on current frame.")
+            return
+        
+        result = QMessageBox.question(self, "Clear Frame", 
+                                    f"Are you sure you want to clear all {bbox_count} bounding boxes from current frame?",
+                                    QMessageBox.Yes | QMessageBox.No)
+        
+        if result == QMessageBox.Yes:
+            cleared_count = self.video_canvas.clear_current_frame_bboxes()
+            print(f"Cleared {cleared_count} bboxes from frame {current_frame}")

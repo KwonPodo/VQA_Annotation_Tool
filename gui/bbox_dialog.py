@@ -10,7 +10,7 @@ from PySide6.QtCore import Qt
 class BBoxAnnotationDialog(QDialog):
     """Dialog for annotating bounding box with object type and track ID"""
     
-    def __init__(self, available_objects, existing_track_ids=None, parent=None):
+    def __init__(self, available_objects, existing_track_ids=None, current_frame_track_ids=None, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Annotate Bounding Box")
         self.setModal(True)
@@ -18,6 +18,7 @@ class BBoxAnnotationDialog(QDialog):
         
         self.available_objects = available_objects
         self.existing_track_ids = existing_track_ids or {}
+        self.current_frame_track_ids = current_frame_track_ids or []  # track_id list for current frame
         
         self.result_object_type = None
         self.result_track_id = None
@@ -72,8 +73,14 @@ class BBoxAnnotationDialog(QDialog):
         if not object_type:
             return
             
-        # Generate suggested track ID
-        suggested_id = self.generate_track_id(object_type)
+        # Suggest the most recently used track ID from existing track IDs
+        if object_type in self.existing_track_ids and self.existing_track_ids[object_type]:
+            # Suggest the most recently used track ID (last in list)
+            suggested_id = self.existing_track_ids[object_type][-1]
+        else:
+            # Generate new track ID
+            suggested_id = self.generate_track_id(object_type)
+            
         self.track_input.setText(suggested_id)
         
     def generate_track_id(self, object_type):
@@ -103,13 +110,11 @@ class BBoxAnnotationDialog(QDialog):
             QMessageBox.warning(self, "Error", "Please enter a track ID")
             return
             
-        # Check for duplicate track ID across all object types
-        all_existing_ids = []
-        for ids in self.existing_track_ids.values():
-            all_existing_ids.extend(ids)
-            
-        if track_id in all_existing_ids:
-            QMessageBox.warning(self, "Error", f"Track ID '{track_id}' already exists")
+        # Check for duplicate track ID only in current frame (allow same ID in different frames)
+        if track_id in self.current_frame_track_ids:
+            QMessageBox.warning(self, "Error", 
+                            f"Track ID '{track_id}' already exists in current frame.\n"
+                            f"Please use a different track ID for this frame.")
             return
             
         self.result_object_type = object_type
