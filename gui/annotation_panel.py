@@ -16,7 +16,7 @@ class AnnotationPanel(QGroupBox):
     def __init__(self):
         super().__init__("Annotation Controls")
         self.setFixedWidth(HALF_PANEL_WIDTH)
-        self.setMaximumHeight(380)
+        self.setMaximumHeight(480)
         layout = QVBoxLayout(self)
 
         # Current navigation mode display
@@ -29,6 +29,8 @@ class AnnotationPanel(QGroupBox):
         # Time segment input
         segment_input_group = QGroupBox("Set Time Segment")
         segment_layout = QVBoxLayout(segment_input_group)
+        segment_layout.setSpacing(8)
+        segment_layout.setContentsMargins(10, 15, 10, 15)
 
         # Start frame input
         start_layout = QHBoxLayout()
@@ -61,18 +63,26 @@ class AnnotationPanel(QGroupBox):
         # Apply & Undo segment button
         self.apply_segment_btn = QPushButton("Apply Time Segment")
         self.apply_segment_btn.setEnabled(False)
-        self.apply_segment_btn.setMinimumHeight(40)
+        
+        self.apply_segment_btn.setMinimumWidth(30)
+        self.apply_segment_btn.setMinimumHeight(35)
+        self.apply_segment_btn.setMaximumWidth(HALF_PANEL_WIDTH - 30)
 
         self.undo_segment_btn = QPushButton("Undo Time Segment")
         self.undo_segment_btn.setEnabled(False)
-        self.undo_segment_btn.setMinimumHeight(40)
+        self.undo_segment_btn.setMinimumWidth(30)
+        self.undo_segment_btn.setMinimumHeight(35)
+        self.undo_segment_btn.setMaximumWidth(HALF_PANEL_WIDTH - 30)
 
 
         segment_layout.addLayout(start_layout)
         segment_layout.addLayout(end_layout)
         segment_layout.addLayout(interval_layout)
+        segment_layout.addSpacing(10)
         segment_layout.addWidget(self.apply_segment_btn)
+        segment_layout.addSpacing(5)
         segment_layout.addWidget(self.undo_segment_btn)
+        segment_layout.addSpacing(10)
 
         # Segment info display
         self.segment_info_label = QLabel("No segment selected")
@@ -83,6 +93,8 @@ class AnnotationPanel(QGroupBox):
         # Navigation mode controls
         nav_group = QGroupBox("Navigation Mode")
         nav_layout = QVBoxLayout(nav_group)
+        nav_layout.setSpacing(8)
+        nav_layout.setContentsMargins(10, 15, 10, 15)
 
         self.frame_mode_btn = QPushButton("Switch to Frame Mode")
         self.segment_mode_btn = QPushButton("Switch to Segment Mode")

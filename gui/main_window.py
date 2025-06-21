@@ -126,6 +126,10 @@ class MainWindow(QMainWindow):
         self.save_as_btn = QPushButton("Save As...")
         self.load_annotation_btn = QPushButton("Load Annotation")
 
+        for btn in [self.load_video_btn, self.save_annotation_btn, self.save_as_btn, self.load_annotation_btn]:
+            btn.setMinimumWidth(120)
+            btn.setMinimumHeight(32)
+
         file_layout.addWidget(self.load_video_btn)
         file_layout.addWidget(self.save_annotation_btn)
         file_layout.addWidget(self.save_as_btn)
