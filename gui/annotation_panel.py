@@ -1,28 +1,11 @@
-import os
-import json
-import cv2
-import numpy as np
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QKeySequence, QShortcut, QPixmap, QImage
 from PySide6.QtWidgets import (
-    QMainWindow,
     QHBoxLayout,
     QVBoxLayout,
-    QWidget,
     QPushButton,
     QLabel,
-    QFileDialog,
     QGroupBox,
-    QSplitter,
-    QFrame,
-    QCheckBox,
-    QMessageBox,
-    QScrollBar,
-    QLineEdit,
-    QScrollArea,
     QSpinBox,
-    QGridLayout
 )
 
 from gui.config import HALF_PANEL_WIDTH, PANEL_SPACING
@@ -78,11 +61,11 @@ class AnnotationPanel(QGroupBox):
         # Apply & Undo segment button
         self.apply_segment_btn = QPushButton("Apply Time Segment")
         self.apply_segment_btn.setEnabled(False)
-        self.apply_segment_btn.setMinimumWidth(30)
+        self.apply_segment_btn.setMinimumHeight(40)
 
         self.undo_segment_btn = QPushButton("Undo Time Segment")
         self.undo_segment_btn.setEnabled(False)
-        self.undo_segment_btn.setMinimumWidth(30)
+        self.undo_segment_btn.setMinimumHeight(40)
 
 
         segment_layout.addLayout(start_layout)

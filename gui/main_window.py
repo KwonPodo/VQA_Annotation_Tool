@@ -5,8 +5,7 @@ Main Window for Video QA Annotation Tool
 
 import os
 import json
-import cv2
-import numpy as np
+from datetime import datetime
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QKeySequence, QShortcut, QPixmap, QImage
@@ -21,354 +20,19 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QSplitter,
     QFrame,
-    QCheckBox,
     QMessageBox,
-    QScrollBar,
-    QLineEdit,
-    QScrollArea,
     QSpinBox,
-    QGridLayout,
-    QDialog
+    QTabWidget,
+    QListWidget,
+    QListWidgetItem
 )
 
 from gui.annotation_panel import AnnotationPanel
 from gui.object_panel import ObjectPanel
 from gui.qa_panel import QAPanel
-from gui.config import PANEL_WIDTH, PANEL_SPACING, track_id_color_palette
+from gui.config import PANEL_WIDTH
+from gui.video_canvas import VideoCanvas
 
-
-class VideoCanvas(QLabel):
-    """Video Display Canvas"""
-
-    def __init__(self):
-        super().__init__()
-        self.setMinimumSize(500, 300)
-        self.setStyleSheet("border: 2px solid #cccccc; background-color: #f5f5f5;")
-        self.setAlignment(Qt.AlignCenter)
-        self.setText("Load Video File\n(Video Canvas)")
-
-        # Video properties
-        self.video_cap = None
-        self.current_frame = 0
-        self.total_frames = 0
-        self.fps = 0
-
-        # Bounding box annotation state
-        self.bbox_mode = False
-        self.available_objects = [] # objects selected from object panel
-        self.is_drawing = False
-        self.start_point = None
-        self.end_point = None
-        self.scale_factor = 1.0
-
-        # Store bboxes with track_id
-        self.frame_bboxes = {} # Dict[frame_index: List[bbox_list]]
-
-        # Track ID management
-        self.existing_track_ids = {} # Dict[object_type: List[track_id]]
-
-        self.track_registry = {} # Dict[object_type: List[track_id]]
-        self.color_palette = track_id_color_palette
-        self.color_index = 0
-
-    def load_video(self, file_path):
-        """Load video file"""
-        if self.video_cap:
-            self.video_cap.release()
-
-        self.video_cap = cv2.VideoCapture(file_path)
-        if self.video_cap.isOpened():
-            self.total_frames = int(self.video_cap.get(cv2.CAP_PROP_FRAME_COUNT))
-            self.fps = self.video_cap.get(cv2.CAP_PROP_FPS)
-            self.current_frame = 0
-            self.set_frame(0)
-            return True
-
-        return False
-
-    def set_frame(self, frame_index):
-        """Set current frame index"""
-        if not self.video_cap or frame_index < 0 or frame_index >= self.total_frames:
-            return False
-
-        self.video_cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
-        ret, frame = self.video_cap.read()
-
-        if ret:
-            self.current_frame = frame_index
-
-            # Convert BGR to RGB
-            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            h, w, ch = rgb_frame.shape
-            bytes_per_line = ch * w
-
-            # Create QImage and scale to fit canvas
-            qt_image = QImage(
-                rgb_frame.data, w, h, bytes_per_line, QImage.Format_RGB888
-            )
-            canvas_size = self.size()
-            scaled_pixmap = QPixmap.fromImage(qt_image).scaled(
-                canvas_size, Qt.KeepAspectRatio, Qt.SmoothTransformation
-            )
-            self.setPixmap(scaled_pixmap)
-            return True
-        return False
-
-    def next_frame(self):
-        """Go to next frame"""
-        if self.current_frame < self.total_frames - 1:
-            return self.set_frame(self.current_frame + 1)
-        return False
-
-    def prev_frame(self):
-        """Go to previous frame"""
-        if self.current_frame > 0:
-            return self.set_frame(self.current_frame - 1)
-        return False
-    
-    def enable_bbox_mode(self, available_objects):
-        """Enable bbox annotation mode"""
-        self.bbox_mode = True
-        self.available_objects = available_objects
-        self.setCursor(Qt.CrossCursor)
-        print(f'BBox mode enabled for {available_objects}')
-    
-    def disable_bbox_mode(self):
-        """Disable bbox annotation mode"""
-        self.bbox_mode = False
-        self.available_objects = []
-        self.setCursor(Qt.ArrowCursor)
-        self.is_drawing = False
-        print('BBox mode disabled')
-    
-    def get_next_color(self):
-        """Get next color from color palette"""
-        color = self.color_palette[self.color_index % len(self.color_palette)]
-        self.color_index += 1
-        return color
-    
-    def add_bbox_with_annotation(self, x, y, width, height, object_type, track_id):
-        """Add annotated bounding box to current frame"""
-        # Assign color if new track_id
-        if track_id not in self.track_registry:
-            self.track_registry[track_id] = self.get_next_color()
-        
-        bbox = {
-            'id' : f'bbox_{len(self.frame_bboxes.get(self.current_frame, []))}',
-            'x': x,
-            'y': y,
-            'width': width,
-            'height': height,
-            'object_type': object_type,
-            'track_id': track_id,
-            'color': self.track_registry[track_id]
-        }
-
-        if self.current_frame not in self.frame_bboxes:
-            self.frame_bboxes[self.current_frame] = []
-        
-        self.frame_bboxes[self.current_frame].append(bbox)
-
-        # Update track_id registry
-        if object_type not in self.existing_track_ids:
-            self.existing_track_ids[object_type] = []
-        
-        if track_id not in self.existing_track_ids[object_type]:
-            self.existing_track_ids[object_type].append(track_id)
-        print(f'Added bbox: {object_type} - {track_id}')
-        self.update()
-    
-    def show_annotation_dialog(self, x, y, width, height):
-        """Show annotation dialog for bounding box"""
-        from gui.bbox_dialog import BBoxAnnotationDialog
-        
-        # Collect track_ids used in current frame
-        current_frame_track_ids = []
-        if self.current_frame in self.frame_bboxes:
-            current_frame_track_ids = [bbox['track_id'] for bbox in self.frame_bboxes[self.current_frame]]
-        
-        dialog = BBoxAnnotationDialog(
-            available_objects=self.available_objects,
-            existing_track_ids=self.existing_track_ids.copy(),
-            current_frame_track_ids=current_frame_track_ids,  # Pass current frame track_ids
-            parent=self
-        )
-        
-        if dialog.exec() == QDialog.Accepted:
-            object_type, track_id = dialog.get_annotation_result()
-            if object_type and track_id:
-                self.add_bbox_with_annotation(x, y, width, height, object_type, track_id)
-                return True
-        return False
-
-    def undo_last_bbox(self):
-        """Remove the last bounding box from current frame"""
-        if self.current_frame in self.frame_bboxes:
-            bboxes = self.frame_bboxes[self.current_frame]
-            if bboxes:
-                removed = bboxes.pop()
-                print(f"Removed bbox: {removed['object_type']} - {removed['track_id']}")
-                self.update()  # Trigger repaint
-                return True
-        return False
-
-    def clear_current_frame_bboxes(self):
-        """Clear all bboxes from current frame"""
-        if self.current_frame in self.frame_bboxes:
-            count = len(self.frame_bboxes[self.current_frame])
-            self.frame_bboxes[self.current_frame] = []
-            print(f"Cleared {count} bboxes from frame {self.current_frame}")
-            self.update()  # Trigger repaint
-            return count
-        return 0
-
-    def canvas_to_image_coords(self, canvas_point):
-        """Convert canvas coordinates to image coordinates"""
-        if not self.pixmap():
-            return None
-        
-        pixmap = self.pixmap()
-        canvas_rect = self.rect()
-        pixmap_rect = pixmap.rect()
-        
-        # Calculate offset (image is centered in canvas)
-        x_offset = (canvas_rect.width() - pixmap_rect.width()) // 2
-        y_offset = (canvas_rect.height() - pixmap_rect.height()) // 2
-        
-        # Convert to image coordinates
-        img_x = int((canvas_point.x() - x_offset) / self.scale_factor)
-        img_y = int((canvas_point.y() - y_offset) / self.scale_factor)
-        
-        return (img_x, img_y)
-
-    def image_to_canvas_coords(self, img_point):
-        """Convert image coordinates to canvas coordinates"""
-        if not self.pixmap():
-            return None
-        
-        pixmap = self.pixmap()
-        canvas_rect = self.rect()
-        pixmap_rect = pixmap.rect()
-        
-        x_offset = (canvas_rect.width() - pixmap_rect.width()) // 2
-        y_offset = (canvas_rect.height() - pixmap_rect.height()) // 2
-        
-        canvas_x = int(img_point[0] * self.scale_factor + x_offset)
-        canvas_y = int(img_point[1] * self.scale_factor + y_offset)
-        
-        return (canvas_x, canvas_y)
-
-    # Mouse events for bounding box drawing
-    def mousePressEvent(self, event):
-        """Handle mouse press for bbox drawing"""
-        if not self.bbox_mode or event.button() != Qt.LeftButton:
-            return
-        
-        self.is_drawing = True
-        self.start_point = event.position().toPoint()
-        self.end_point = self.start_point
-
-    def mouseMoveEvent(self, event):
-        """Handle mouse move for bbox preview"""
-        if not self.bbox_mode or not self.is_drawing:
-            return
-        
-        self.end_point = event.position().toPoint()
-        self.update()  # Trigger repaint for preview
-
-    def mouseReleaseEvent(self, event):
-        """Handle mouse release to complete bbox and show annotation dialog"""
-        if not self.bbox_mode or event.button() != Qt.LeftButton or not self.is_drawing:
-            return
-        
-        self.is_drawing = False
-        self.end_point = event.position().toPoint()
-        
-        # Convert to image coordinates
-        start_img = self.canvas_to_image_coords(self.start_point)
-        end_img = self.canvas_to_image_coords(self.end_point)
-        
-        if start_img and end_img:
-            # Calculate bbox dimensions
-            x = min(start_img[0], end_img[0])
-            y = min(start_img[1], end_img[1])
-            width = abs(end_img[0] - start_img[0])
-            height = abs(end_img[1] - start_img[1])
-            
-            # Only add if bbox has minimum size
-            if width > 10 and height > 10:
-                self.show_annotation_dialog(x, y, width, height)
-
-    def paintEvent(self, event):
-        """Paint event to draw bboxes and preview"""
-        super().paintEvent(event)
-        
-        if not self.pixmap():
-            return
-        
-        from PySide6.QtGui import QPainter
-        painter = QPainter(self)
-        
-        # Draw existing bboxes
-        self.draw_existing_bboxes(painter)
-        
-        # Draw preview bbox while drawing
-        if self.is_drawing and self.start_point and self.end_point:
-            self.draw_preview_bbox(painter)
-
-    def draw_existing_bboxes(self, painter):
-        """Draw all existing bboxes for current frame"""
-        if self.current_frame not in self.frame_bboxes:
-            return
-        
-        from PySide6.QtGui import QPen, QColor
-        from PySide6.QtCore import QRect
-        
-        for bbox in self.frame_bboxes[self.current_frame]:
-            # Convert image coords to canvas coords
-            top_left = self.image_to_canvas_coords((bbox['x'], bbox['y']))
-            bottom_right = self.image_to_canvas_coords((bbox['x'] + bbox['width'], bbox['y'] + bbox['height']))
-            
-            if top_left and bottom_right:
-                # Use track-specific color
-                color = QColor(*bbox['color'])
-                pen = QPen(color, 2)
-                painter.setPen(pen)
-                
-                # Draw rectangle
-                rect = QRect(top_left[0], top_left[1], 
-                           bottom_right[0] - top_left[0], 
-                           bottom_right[1] - top_left[1])
-                painter.drawRect(rect)
-                
-                # Draw label with track ID
-                label = f"{bbox['object_type']} - {bbox['track_id']}"
-                painter.setPen(QPen(color, 1))
-                painter.drawText(top_left[0], top_left[1] - 5, label)
-
-    def draw_preview_bbox(self, painter):
-        """Draw preview bbox while drawing"""
-        from PySide6.QtGui import QPen, QColor
-        from PySide6.QtCore import QRect
-        
-        pen = QPen(QColor(255, 0, 0), 2, Qt.DashLine)  # Red dashed line
-        painter.setPen(pen)
-        
-        x = min(self.start_point.x(), self.end_point.x())
-        y = min(self.start_point.y(), self.end_point.y())
-        width = abs(self.end_point.x() - self.start_point.x())
-        height = abs(self.end_point.y() - self.start_point.y())
-        
-        rect = QRect(x, y, width, height)
-        painter.drawRect(rect)
-
-    def get_frame_annotations(self, frame_num):
-        """Get all annotations for a specific frame"""
-        return self.frame_bboxes.get(frame_num, [])
-
-    def get_all_annotations(self):
-        """Get all annotations across all frames"""
-        return self.frame_bboxes.copy()
 
 
 class MainWindow(QMainWindow):
@@ -395,6 +59,9 @@ class MainWindow(QMainWindow):
         self.current_video_name = None
         self.current_annotation_data = None
         self.saved_annotations = {}
+
+        # Current Working JSON File
+        self.current_json_file = None
 
 
         # Setup
@@ -456,10 +123,12 @@ class MainWindow(QMainWindow):
 
         self.load_video_btn = QPushButton("Load Video")
         self.save_annotation_btn = QPushButton("Save Annotation")
+        self.save_as_btn = QPushButton("Save As...")
         self.load_annotation_btn = QPushButton("Load Annotation")
 
         file_layout.addWidget(self.load_video_btn)
         file_layout.addWidget(self.save_annotation_btn)
+        file_layout.addWidget(self.save_as_btn)
         file_layout.addWidget(self.load_annotation_btn)
         file_layout.addStretch()
 
@@ -516,56 +185,76 @@ class MainWindow(QMainWindow):
         return panel
 
     def create_right_panel(self):
-        """Create right panel with annotation controls"""
+        """Create right panel with tabbed annotation controls"""
         panel = QFrame()
         layout = QVBoxLayout(panel)
 
+        # Tab Widget
+        self.tab_widget = QTabWidget()
+        
+        # Grounding Tab
+        grounding_tab = self.create_grounding_tab()
+        self.tab_widget.addTab(grounding_tab, "Grounding")
+        
+        # QA Tab
+        qa_tab = self.create_qa_tab()
+        self.tab_widget.addTab(qa_tab, "QA")
+        
+        # Tab Changed Callback
+        self.tab_widget.currentChanged.connect(self.on_tab_changed)
+        
+        layout.addWidget(self.tab_widget)
+        
+        return panel
+    
+    def create_grounding_tab(self):
+        """Create grounding tab with existing controls"""
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        
         # Top row: Object panel + Annotation panel
         top_row_layout = QHBoxLayout()
-
+        
         # Object selection panel
         self.object_panel = ObjectPanel()
-
+        
         # Annotation controls panel
         self.annotation_panel = AnnotationPanel()
-
+        
         top_row_layout.addWidget(self.object_panel)
         top_row_layout.addWidget(self.annotation_panel)
-
-        # Bottom Row : QA panel
-        self.qa_panel = QAPanel()
-
+        
         # Action buttons
         action_group = QGroupBox("Annotation Controls")
         action_layout = QVBoxLayout(action_group)
-
+        
         # Status Label
         self.annotation_status_label = QLabel("Load video and select objects to start annotation")
         self.annotation_status_label.setStyleSheet(
             "color: #666; font-style: italic; padding: 5px; "
             "border: 1px solid #ddd; border-radius: 3px;"
         )
-
+        
         # Main Buttons
         main_button_layout = QHBoxLayout()
         self.start_annotation_btn = QPushButton("Start Annotation")
         main_button_layout.addWidget(self.start_annotation_btn)
         main_button_layout.addWidget(self.save_annotation_btn)
-
+        
         # Bbox Annotation Buttons
         bbox_layout = QHBoxLayout()
         self.start_bbox_btn = QPushButton("Start BBox Mode")
         self.stop_bbox_btn = QPushButton("Stop BBox Mode")
         bbox_layout.addWidget(self.start_bbox_btn)
         bbox_layout.addWidget(self.stop_bbox_btn)
-
+        
         # BBox Edit Buttons
         edit_layout = QHBoxLayout()
         self.undo_bbox_btn = QPushButton("Undo Last BBox")
         self.clear_frame_btn = QPushButton("Clear Frame")
         edit_layout.addWidget(self.undo_bbox_btn)
         edit_layout.addWidget(self.clear_frame_btn)
-
+        
         # Initial Disable
         self.start_annotation_btn.setEnabled(False)
         self.save_annotation_btn.setEnabled(False)
@@ -573,24 +262,45 @@ class MainWindow(QMainWindow):
         self.stop_bbox_btn.setEnabled(False)
         self.undo_bbox_btn.setEnabled(False)
         self.clear_frame_btn.setEnabled(False)
-
+        
         action_layout.addWidget(self.annotation_status_label)
         action_layout.addLayout(main_button_layout)
         action_layout.addLayout(bbox_layout)
         action_layout.addLayout(edit_layout)
-
+        
         layout.addLayout(top_row_layout)
-        layout.addWidget(self.qa_panel)
         layout.addWidget(action_group)
         layout.addStretch()
-
-        return panel
+        
+        return tab
+    
+    def create_qa_tab(self):
+        """Create QA tab"""
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        
+        # QA panel
+        self.qa_panel = QAPanel()
+        layout.addWidget(self.qa_panel)
+        
+        return tab
+    
+    def on_tab_changed(self, index):
+        """Handle tab change"""
+        tab_names = ["Grounding", "QA"]
+        if index < len(tab_names):
+            print(f"Switched to {tab_names[index]} tab")
+            
+            # Update track_ids when switching to QA tab
+            if index == 1:  # QA tab
+                self.update_qa_panel_track_ids()
 
     def setup_connections(self):
         """Setup signal connections"""
         # File operations
         self.load_video_btn.clicked.connect(self.load_video)
         self.save_annotation_btn.clicked.connect(self.save_annotation)
+        self.save_as_btn.clicked.connect(self.save_as_new_file)
         self.load_annotation_btn.clicked.connect(self.load_annotation)
 
         # Video controls
@@ -626,6 +336,9 @@ class MainWindow(QMainWindow):
         self.annotation_panel.start_frame_input.editingFinished.connect(lambda: self.setFocus())
         self.annotation_panel.end_frame_input.editingFinished.connect(lambda: self.setFocus())
         self.annotation_panel.interval_input.editingFinished.connect(lambda: self.setFocus())
+
+        if hasattr(self, 'qa_panel'):
+            self.qa_panel.qa_data_changed.connect(self.on_qa_data_changed)
 
     def setup_keyboard_shortcuts(self):
         """Setup keyboard shortcuts"""
@@ -697,6 +410,7 @@ class MainWindow(QMainWindow):
         # Reset Button State
         self.start_annotation_btn.setEnabled(False)
         self.save_annotation_btn.setEnabled(False)
+        self.save_as_btn.setEnabled(False)
         self.start_bbox_btn.setEnabled(False)
         self.stop_bbox_btn.setEnabled(False)
         self.undo_bbox_btn.setEnabled(False)
@@ -719,24 +433,181 @@ class MainWindow(QMainWindow):
                 )
 
     def save_annotation(self):
-        """Save annotation to JSON"""
+        """Save annotation to JSON - Concat to current loaded JSON file"""
+        if not self.get_current_annotation_with_qa():
+            QMessageBox.warning(self, "No Annotation", "No annotation to save")
+            return
+        
+        # If Current working JSON File is set, save at that file
+        if self.current_json_file:
+            if self.save_to_file(self.current_json_file):
+                QMessageBox.information(self, "Save Success", f"Annotation saved to {os.path.basename(self.current_json_file)}")
+            else:
+                QMessageBox.critical(self, "Save Failed", "Failed to save annotation")
+        else:
+            # Load 하지 않고 처음 작업하는 경우 새 파일로 저장
+            self.save_as_new_file()
+        
+    def save_as_new_file(self):
+        """Save as new file"""
+        default_filename = f"{self.current_video_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         file_path, _ = QFileDialog.getSaveFileName(
-            self, "Save Annotation", "", "JSON files (*.json);;All files (*.*)"
+            self, "Save Annotation As", default_filename, "JSON files (*.json);;All files (*.*)"
         )
-
+        
         if file_path:
-            print(f"Saving annotation: {file_path}")
-            # TODO: Implement annotation saving
+            self.current_json_file = file_path
+            if self.save_to_file(file_path):
+                QMessageBox.information(self, "Save Success", f"Annotation saved to {os.path.basename(file_path)}")
+            else:
+                QMessageBox.critical(self, "Save Failed", "Failed to save annotation")
+
+    def save_to_file(self, file_path):
+        """Actual file saving logic - video-centric structure"""
+        try:
+            # Load existing file if it exists
+            if os.path.exists(file_path):
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+            else:
+                data = {"videos": {}}
+            
+            video_name = self.current_video_name
+            current_annotation = self.get_current_annotation_with_qa()
+            
+            # Initialize video entry (if not exists)
+            if video_name not in data["videos"]:
+                data["videos"][video_name] = {
+                    "video_info": current_annotation["video_info"],
+                    "groundings": []
+                }
+            
+            # Add new grounding
+            new_grounding = {
+                "grounding_id": len(data["videos"][video_name]["groundings"]) + 1,
+                "created_at": datetime.now().isoformat(),
+                "time_segment": current_annotation["time_segment"],
+                "selected_objects": current_annotation["selected_objects"],
+                "annotations": current_annotation["annotations"],
+                "qa_sessions": current_annotation.get("qa_data", [])
+            }
+            
+            data["videos"][video_name]["groundings"].append(new_grounding)
+            
+            # Save to file
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+            
+            grounding_count = len(data["videos"][video_name]["groundings"])
+            print(f"Saved grounding #{grounding_count} for {video_name}")
+            return True
+            
+        except Exception as e:
+            print(f"Error saving: {e}")
+            return False
 
     def load_annotation(self):
-        """Load annotation from JSON"""
+        """Load annotation - 비디오별 최신 grounding 로드"""
         file_path, _ = QFileDialog.getOpenFileName(
-            self, "Load Annotation", "", "JSON files (*.json);;All files (*.*)"
+            self, "Load Annotation", "",
+            "JSON files (*.json);;All files (*.*)"
         )
 
         if file_path:
-            print(f"Loading annotation: {file_path}")
-            # TODO: Implement annotation loading
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                
+                # 현재 파일로 설정
+                self.current_json_file = file_path
+                
+                # 현재 비디오 찾기
+                if self.current_video_name not in data["videos"]:
+                    QMessageBox.warning(self, "Video Not Found", 
+                                        f"No annotations found for video '{self.current_video_name}'")
+                    return
+                
+                video_data = data["videos"][self.current_video_name]
+                groundings = video_data["groundings"]
+                
+                if not groundings:
+                    QMessageBox.warning(self, "No Groundings", 
+                                        f"No groundings found for video '{self.current_video_name}'")
+                    return
+                
+                # 가장 최근 grounding 로드 (마지막 것)
+                latest_grounding = groundings[-1]
+                self.load_grounding_data(latest_grounding)
+                
+                QMessageBox.information(self, "Load Successful", 
+                                        f"Loaded grounding #{latest_grounding['grounding_id']} from {os.path.basename(file_path)}\n"
+                                        f"Total groundings for this video: {len(groundings)}")
+                
+            except Exception as e:
+                QMessageBox.critical(self, "Load Failed", f"Failed to load: {e}")
+
+    def load_grounding_data(self, grounding_data):
+        """grounding 데이터를 UI에 로드"""
+        try:
+            # Time segment 설정
+            time_segment = grounding_data["time_segment"]
+            self.annotation_panel.start_frame_input.setValue(time_segment["start_frame"])
+            self.annotation_panel.end_frame_input.setValue(time_segment["end_frame"])
+            self.annotation_panel.interval_input.setValue(time_segment["interval"])
+            
+            # Time segment 적용
+            self.apply_time_segment()
+            
+            # Objects 선택
+            self.object_panel.clear_selection()
+            for obj in grounding_data["selected_objects"]:
+                if obj in self.object_panel.checkboxes:
+                    self.object_panel.checkboxes[obj].setChecked(True)
+            
+            # Annotation 시작
+            self.start_annotation()
+            
+            # BBox 데이터 로드
+            self.video_canvas.frame_bboxes = grounding_data["annotations"]
+            self.rebuild_track_registries()
+            
+            # QA 데이터 로드
+            if hasattr(self, 'qa_panel'):
+                self.qa_panel.set_qa_data(grounding_data.get("qa_sessions", []))
+                self.update_qa_panel_track_ids()
+            
+            self.update_annotation_status(f"Loaded grounding #{grounding_data['grounding_id']} - ready to continue")
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Load Error", f"Error loading grounding: {e}")
+
+    def rebuild_track_registries(self):
+        """Track registry 재구축"""
+        self.video_canvas.existing_track_ids = {}
+        self.video_canvas.track_registry = {}
+        color_index = 0
+        
+        for frame_bboxes in self.video_canvas.frame_bboxes.values():
+            for bbox in frame_bboxes:
+                track_id = bbox['track_id']
+                object_type = bbox['object_type']
+                
+                # existing_track_ids 업데이트
+                if object_type not in self.video_canvas.existing_track_ids:
+                    self.video_canvas.existing_track_ids[object_type] = []
+                if track_id not in self.video_canvas.existing_track_ids[object_type]:
+                    self.video_canvas.existing_track_ids[object_type].append(track_id)
+                
+                # 색상 할당
+                if track_id not in self.video_canvas.track_registry:
+                    color = self.video_canvas.color_palette[color_index % len(self.video_canvas.color_palette)]
+                    self.video_canvas.track_registry[track_id] = color
+                    bbox['color'] = color
+                    color_index += 1
+        
+        self.video_canvas.color_index = color_index
+        self.video_canvas.update()
+        print(f"Rebuilt registries: {len(self.video_canvas.track_registry)} tracks")
 
     def prev_frame(self):
         """Go to previous frame"""
@@ -924,6 +795,9 @@ class MainWindow(QMainWindow):
         self.video_canvas.track_registry = {}
         self.video_canvas.color_index = 0
 
+        if hasattr(self, 'qa_panel'):
+            self.qa_panel.reset_qa_panel()
+
         # Update UI state
         self.start_bbox_btn.setEnabled(True)
         self.update_annotation_status(f"Annotation started: {', '.join(selected_objects)}")
@@ -1005,7 +879,7 @@ class MainWindow(QMainWindow):
         self.undo_bbox_btn.setEnabled(True)
         self.clear_frame_btn.setEnabled(True)
         
-        # 객체 선택 비활성화 (어노테이션 중에는 변경 불가)
+        # Disable Object Selection (cannot change during annotation)
         self.object_panel.setEnabled(False)
         
         print(f"Started bbox annotation for objects: {self.selected_objects_for_bbox}")
@@ -1036,7 +910,18 @@ class MainWindow(QMainWindow):
         # Update Status
         annotated_frames = len(self.video_canvas.frame_bboxes)
         total_frames = len(self.sampled_frames)
-        self.update_annotation_status(f"BBox Completed: {annotated_frames}/{total_frames} frames")
+        self.update_annotation_status(f"BBox Completed: {annotated_frames}/{total_frames} frames - Ready for QA")
+
+        # Update QA Panel
+        self.update_qa_panel_track_ids()
+        
+        # Switch to QA tab (optional)
+        if hasattr(self, 'tab_widget'):
+            result = QMessageBox.question(self, "Switch to QA", 
+                                        "BBox annotation completed. Switch to QA tab?",
+                                        QMessageBox.Yes | QMessageBox.No)
+            if result == QMessageBox.Yes:
+                self.tab_widget.setCurrentIndex(1)  # QA tab
 
         print(f"BBox Annotation Completed: {annotated_frames}/{total_frames} frames")
 
@@ -1069,3 +954,41 @@ class MainWindow(QMainWindow):
         if result == QMessageBox.Yes:
             cleared_count = self.video_canvas.clear_current_frame_bboxes()
             print(f"Cleared {cleared_count} bboxes from frame {current_frame}")
+
+    def update_qa_panel_track_ids(self):
+        """Update QA panel with available track IDs"""
+        if hasattr(self, 'qa_panel') and self.video_canvas.frame_bboxes:
+            # Collect all track_ids
+            all_track_ids = set()
+            for frame_bboxes in self.video_canvas.frame_bboxes.values():
+                for bbox in frame_bboxes:
+                    all_track_ids.add(bbox['track_id'])
+            
+            track_ids = sorted(list(all_track_ids))
+            self.qa_panel.set_available_track_ids(track_ids)
+            print(f"Updated QA panel with track IDs: {track_ids}")
+        else:
+            if hasattr(self, 'qa_panel'):
+                self.qa_panel.set_available_track_ids([])
+
+    def get_current_annotation_with_qa(self):
+        """Get current annotation data including QA"""
+        if not self.current_annotation_data:
+            return None
+        
+        # Add QA data
+        annotation_data = self.current_annotation_data.copy()
+        if hasattr(self, 'qa_panel'):
+            annotation_data["qa_data"] = self.qa_panel.get_all_qa_data()
+        
+        return annotation_data
+
+    def on_qa_data_changed(self, qa_data):
+        """Call when QA data changes"""
+        if self.current_annotation_data:
+            self.current_annotation_data["qa_data"] = qa_data
+            print(f'QA data changed: {qa_data}\t{len(qa_data)} QAs')
+        
+        # Enable Save Annotation Button
+        self.save_annotation_btn.setEnabled(True)
+        self.save_as_btn.setEnabled(True)

@@ -1,10 +1,10 @@
 """
-Bounding Box Annotation Dialog
+Bounding Box Annotation Dialog with Manual Track ID Selection
 """
 
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, 
                             QLabel, QComboBox, QLineEdit, 
-                            QPushButton, QMessageBox)
+                            QPushButton, QMessageBox, QSpinBox)
 from PySide6.QtCore import Qt
 
 class BBoxAnnotationDialog(QDialog):
@@ -14,11 +14,11 @@ class BBoxAnnotationDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Annotate Bounding Box")
         self.setModal(True)
-        self.setFixedSize(300, 150)
+        self.setFixedSize(380, 150)  # Help 텍스트 제거로 높이 감소
         
         self.available_objects = available_objects
         self.existing_track_ids = existing_track_ids or {}
-        self.current_frame_track_ids = current_frame_track_ids or []  # track_id list for current frame
+        self.current_frame_track_ids = current_frame_track_ids or []
         
         self.result_object_type = None
         self.result_track_id = None
@@ -40,13 +40,37 @@ class BBoxAnnotationDialog(QDialog):
         
         layout.addLayout(object_layout)
         
-        # Track ID input
+        # Track ID input with SpinBox
         track_layout = QHBoxLayout()
         track_layout.addWidget(QLabel("Track ID:"))
         
-        self.track_input = QLineEdit()
-        self.track_input.setPlaceholderText("auto-generated")
-        track_layout.addWidget(self.track_input)
+        # Object prefix (readonly)
+        self.track_prefix_label = QLabel("")
+        self.track_prefix_label.setStyleSheet("font-weight: bold; color: #333; min-width: 60px;")
+        
+        # Number SpinBox (메인 윈도우와 동일한 방식)
+        self.track_number_spinbox = QSpinBox()
+        self.track_number_spinbox.setMinimum(1)
+        self.track_number_spinbox.setMaximum(999)
+        self.track_number_spinbox.setValue(1)
+        self.track_number_spinbox.valueChanged.connect(self.on_track_number_changed)
+        self.track_number_spinbox.setFixedWidth(80)
+        # 기본 스타일 유지 (커스텀 스타일 제거)
+        
+        # Arrow label
+        arrow_label = QLabel("→")
+        arrow_label.setStyleSheet("font-size: 14px; color: #666;")
+        
+        # Full track ID display (readonly)
+        self.track_full_display = QLineEdit()
+        self.track_full_display.setReadOnly(True)
+        self.track_full_display.setStyleSheet("background-color: #f0f0f0;")
+        
+        # Add all to track layout
+        track_layout.addWidget(self.track_prefix_label)
+        track_layout.addWidget(self.track_number_spinbox)
+        track_layout.addWidget(arrow_label)
+        track_layout.addWidget(self.track_full_display)
         
         layout.addLayout(track_layout)
         
@@ -72,35 +96,57 @@ class BBoxAnnotationDialog(QDialog):
         """Handle object type change"""
         if not object_type:
             return
-            
-        # Suggest the most recently used track ID from existing track IDs
+        
+        # Update prefix label
+        self.track_prefix_label.setText(f"{object_type}_")
+        
+        # Suggest next available number (but user can change it)
+        suggested_number = self.get_suggested_number(object_type)
+        self.track_number_spinbox.setValue(suggested_number)
+        self.on_track_number_changed(suggested_number)
+    
+    def get_suggested_number(self, object_type):
+        """Get suggested number for object type"""
         if object_type in self.existing_track_ids and self.existing_track_ids[object_type]:
-            # Suggest the most recently used track ID (last in list)
-            suggested_id = self.existing_track_ids[object_type][-1]
+            # Extract numbers from existing track IDs
+            existing_numbers = []
+            for track_id in self.existing_track_ids[object_type]:
+                if track_id.startswith(f"{object_type}_"):
+                    try:
+                        number = int(track_id.split("_")[-1])
+                        existing_numbers.append(number)
+                    except ValueError:
+                        continue
+            
+            # Suggest the most recently used number (for tracking continuity)
+            if existing_numbers:
+                return max(existing_numbers)
+            else:
+                return 1
         else:
-            # Generate new track ID
-            suggested_id = self.generate_track_id(object_type)
+            return 1
+    
+    def on_track_number_changed(self, number):
+        """Handle track number change"""
+        object_type = self.object_combo.currentText()
+        if not object_type:
+            return
             
-        self.track_input.setText(suggested_id)
+        track_id = f"{object_type}_{number:03d}"
+        self.track_full_display.setText(track_id)
         
-    def generate_track_id(self, object_type):
-        """Generate next available track ID for object type"""
-        if object_type not in self.existing_track_ids:
-            self.existing_track_ids[object_type] = []
-        
-        existing_ids = self.existing_track_ids[object_type]
-        
-        # Find next available number
-        counter = 1
-        while f"{object_type}_{counter:03d}" in existing_ids:
-            counter += 1
-            
-        return f"{object_type}_{counter:03d}"
+        # Check if this track ID already exists in current frame
+        if track_id in self.current_frame_track_ids:
+            self.track_full_display.setStyleSheet("background-color: #ffcccc; color: red;")
+            self.ok_button.setEnabled(False)
+        else:
+            self.track_full_display.setStyleSheet("background-color: #ccffcc; color: green;")
+            self.ok_button.setEnabled(True)
     
     def accept_annotation(self):
         """Accept and validate annotation"""
         object_type = self.object_combo.currentText()
-        track_id = self.track_input.text().strip()
+        track_id = self.track_full_display.text().strip()
         
         if not object_type:
             QMessageBox.warning(self, "Error", "Please select an object type")
@@ -110,7 +156,7 @@ class BBoxAnnotationDialog(QDialog):
             QMessageBox.warning(self, "Error", "Please enter a track ID")
             return
             
-        # Check for duplicate track ID only in current frame (allow same ID in different frames)
+        # Check for duplicate track ID only in current frame
         if track_id in self.current_frame_track_ids:
             QMessageBox.warning(self, "Error", 
                             f"Track ID '{track_id}' already exists in current frame.\n"
