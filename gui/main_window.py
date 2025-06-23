@@ -486,9 +486,12 @@ class MainWindow(QMainWindow):
                     "groundings": []
                 }
             
+            existing_ids = [g.get('grounding_id') for g in data['videos'][video_name]['groundings']]
+            next_id = max(existing_ids) + 1 if existing_ids else 1
+
             # Add new grounding
             new_grounding = {
-                "grounding_id": len(data["videos"][video_name]["groundings"]) + 1,
+                "grounding_id": next_id,
                 "created_at": datetime.now().isoformat(),
                 "time_segment": current_annotation["time_segment"],
                 "selected_objects": current_annotation["selected_objects"],
