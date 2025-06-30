@@ -609,7 +609,6 @@ class MainWindow(QMainWindow):
                 if track_id not in self.video_canvas.track_registry:
                     color = self.video_canvas.color_palette[color_index % len(self.video_canvas.color_palette)]
                     self.video_canvas.track_registry[track_id] = color
-                    bbox['color'] = color
                     color_index += 1
         
         self.video_canvas.color_index = color_index

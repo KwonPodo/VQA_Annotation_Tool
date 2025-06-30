@@ -139,14 +139,12 @@ class VideoCanvas(QLabel):
             self.track_registry[track_id] = self.get_next_color()
         
         bbox = {
-            'id' : f'bbox_{len(self.frame_bboxes.get(self.current_frame, []))}',
             'x': x,
             'y': y,
             'width': width,
             'height': height,
             'object_type': object_type,
             'track_id': track_id,
-            'color': self.track_registry[track_id]
         }
 
         if self.current_frame not in self.frame_bboxes:
@@ -316,14 +314,17 @@ class VideoCanvas(QLabel):
             
             if top_left and bottom_right:
                 # Use track-specific color
-                color = QColor(*bbox['color'])
+                if bbox['track_id'] in self.track_registry:
+                    color = QColor(*self.track_registry[bbox['track_id']])
+                else:
+                    color = QColor(255, 0, 0)
                 pen = QPen(color, 2)
                 painter.setPen(pen)
                 
                 # Draw rectangle
                 rect = QRect(top_left[0], top_left[1], 
-                           bottom_right[0] - top_left[0], 
-                           bottom_right[1] - top_left[1])
+                        bottom_right[0] - top_left[0], 
+                        bottom_right[1] - top_left[1])
                 painter.drawRect(rect)
                 
                 # Draw label with track ID
