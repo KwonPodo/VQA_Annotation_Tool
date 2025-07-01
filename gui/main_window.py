@@ -149,15 +149,15 @@ class MainWindow(QMainWindow):
 
         # Navigation buttons
         nav_layout = QHBoxLayout()
-        self.prev_frame_btn = QPushButton("◀ Previous Frame (D, C)")
-        self.next_frame_btn = QPushButton("Next Frame (F, V) ▶")
+        self.prev_frame_btn = QPushButton("◀ Previous Frame (D=1, C=10)")
+        self.next_frame_btn = QPushButton("Next Frame (F=1, V=10) ▶")
         nav_layout.addWidget(self.prev_frame_btn)
         nav_layout.addWidget(self.next_frame_btn)
 
         # Segment buttons
         segment_layout = QHBoxLayout()
-        self.prev_segment_btn = QPushButton("◀◀ Previous Segment (D, C)")
-        self.next_segment_btn = QPushButton("Next Segment (F, V) ▶▶")
+        self.prev_segment_btn = QPushButton("◀◀ Previous Segment (D)")
+        self.next_segment_btn = QPushButton("Next Segment (F) ▶▶")
 
         self.prev_segment_btn.setEnabled(False)
         self.next_segment_btn.setEnabled(False)
@@ -784,7 +784,11 @@ class MainWindow(QMainWindow):
             "video_info": {
                 "filename": self.current_video_name,
                 "total_frames": self.video_canvas.total_frames,
-                "fps": self.video_canvas.fps
+                "fps": self.video_canvas.fps,
+                "resolution": {
+                    "width": self.video_canvas.video_resolution[0],
+                    "height": self.video_canvas.video_resolution[1]
+                }
             },
             "time_segment": {
                 "start_frame": self.sampled_frames[0] if self.sampled_frames else 0,
