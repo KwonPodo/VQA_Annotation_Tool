@@ -280,7 +280,7 @@ class MainWindow(QMainWindow):
         self.annotation_panel.undo_segment_btn.clicked.connect(self.undo_time_segment)
 
         # Grounding Tab Buttons
-        self.undo_bbox_btn.clicked.connect(self.undo_last_bbox)
+        self.undo_bbox_btn.clicked.connect(self.remove_last_bbox)
         self.new_grounding_btn.clicked.connect(self.start_new_grounding)
 
         # Object Panel selection change detector
@@ -923,12 +923,12 @@ class MainWindow(QMainWindow):
         else:
             self.update_annotation_status(f"Ready to start: {', '.join(selected_objects)}")
 
-    def undo_last_bbox(self):
+    def remove_last_bbox(self):
         """Remove last bbox on current frame"""
         if not self.video_canvas.bbox_mode:
             return
         
-        if self.video_canvas.undo_last_bbox():
+        if self.video_canvas.remove_last_bbox():
             print(f"Undid last bbox on frame {self.video_canvas.current_frame}")
         else:
             QMessageBox.information(self, "No BBox", "No bounding boxes to undo on current frame.")

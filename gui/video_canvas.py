@@ -175,7 +175,7 @@ class VideoCanvas(QLabel):
                 return True
         return False
 
-    def undo_last_bbox(self):
+    def remove_last_bbox(self):
         """Remove the last bounding box from current frame"""
         if self.current_frame in self.frame_bboxes:
             bboxes = self.frame_bboxes[self.current_frame]
