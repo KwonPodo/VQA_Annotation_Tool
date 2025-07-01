@@ -14,7 +14,7 @@ class AnnotationPanel(QGroupBox):
     """Annotation control panel placeholder"""
 
     def __init__(self):
-        super().__init__("Annotation Controls")
+        super().__init__("2. Annotation Controls")
         self.setFixedWidth(HALF_PANEL_WIDTH)
         self.setMaximumHeight(480)
         layout = QVBoxLayout(self)
@@ -61,7 +61,7 @@ class AnnotationPanel(QGroupBox):
         interval_layout.addWidget(self.interval_input)
 
         # Apply & Undo segment button
-        self.apply_segment_btn = QPushButton("Apply Time Segment")
+        self.apply_segment_btn = QPushButton("Apply Time Segment (A)")
         self.apply_segment_btn.setEnabled(False)
         
         self.apply_segment_btn.setMinimumWidth(30)
@@ -84,15 +84,8 @@ class AnnotationPanel(QGroupBox):
         segment_layout.addWidget(self.undo_segment_btn)
         segment_layout.addSpacing(10)
 
-        # Segment info display
-        self.segment_info_label = QLabel("No segment selected")
-        self.segment_info_label.setStyleSheet(
-            "color: #666; font-style: italic; margin: 5px 0;"
-        )
-
         # Add to main layout
         layout.addWidget(segment_input_group)
-        layout.addWidget(self.segment_info_label)
         layout.addStretch()
 
     def set_video_info(self, total_frames):
@@ -112,15 +105,7 @@ class AnnotationPanel(QGroupBox):
 
     def update_segment_info(self, sampled_frames):
         """Update segment info display"""
-        if sampled_frames:
-            start = sampled_frames[0]
-            end = sampled_frames[-1]
-            count = len(sampled_frames)
-            self.segment_info_label.setText(
-                f"Segment: {start}-{end}\n{count} sampled frames"
-            )
-        else:
-            self.segment_info_label.setText("No segment selected")
+        pass
 
     def set_navigation_mode(self, mode):
         """Update navigation mode display"""

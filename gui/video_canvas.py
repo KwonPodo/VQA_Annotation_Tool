@@ -162,6 +162,8 @@ class VideoCanvas(QLabel):
             self.existing_track_ids[object_type].append(track_id)
         print(f'Added bbox: {object_type} - {track_id}')
         self.update()
+
+        self.notify_progress_update()
     
     def show_annotation_dialog(self, x, y, width, height):
         """Show annotation dialog for bounding box"""
@@ -194,6 +196,9 @@ class VideoCanvas(QLabel):
                 removed = bboxes.pop()
                 print(f"Removed bbox: {removed['object_type']} - {removed['track_id']}")
                 self.update()  # Trigger repaint
+
+                self.notify_progress_update()
+
                 return True
         return False
 
@@ -204,8 +209,21 @@ class VideoCanvas(QLabel):
             self.frame_bboxes[self.current_frame] = []
             print(f"Cleared {count} bboxes from frame {self.current_frame}")
             self.update()  # Trigger repaint
+
+            self.notify_progress_update()
             return count
         return 0
+    
+    def notify_progress_update(self):
+        """Update BBox Annotation Progress to Main Window"""
+        # Find MainWindow through Parent Chain
+        parent_widget = self.parent()
+        while parent_widget:
+            if hasattr(parent_widget, 'update_progress_display'):
+                parent_widget.update_progress_display()
+                break
+            parent_widget = parent_widget.parent()
+
 
     def canvas_to_image_coords(self, canvas_point):
         """Convert canvas coordinates to image coordinates"""

@@ -6,6 +6,25 @@ from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout,
                             QLabel, QComboBox, QLineEdit, 
                             QPushButton, QMessageBox, QSpinBox)
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QKeySequence, QShortcut
+
+
+class CustomSpinBox(QSpinBox):
+    """Custom SpinBox that passes special keys to parent dialog"""
+    
+    def __init__(self, parent_dialog):
+        super().__init__()
+        self.parent_dialog = parent_dialog
+    
+    def keyPressEvent(self, event):
+        """Handle key events - pass special keys to dialog"""
+        # W/S/Enter/Space -> Dialog
+        if event.key() in (Qt.Key_W, Qt.Key_S, Qt.Key_Return, Qt.Key_Enter, Qt.Key_Space, Qt.Key_Escape):
+            self.parent_dialog.keyPressEvent(event)
+            return
+        
+        # Arrow Keys -> QSpinBox
+        super().keyPressEvent(event)
 
 class BBoxAnnotationDialog(QDialog):
     """Dialog for annotating bounding box with object type and track ID"""
@@ -14,7 +33,7 @@ class BBoxAnnotationDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Annotate Bounding Box")
         self.setModal(True)
-        self.setFixedSize(380, 150)  # Help 텍스트 제거로 높이 감소
+        self.setFixedSize(380, 150)
         
         self.available_objects = available_objects
         self.existing_track_ids = existing_track_ids or {}
@@ -24,6 +43,7 @@ class BBoxAnnotationDialog(QDialog):
         self.result_track_id = None
         
         self.setup_ui()
+        self.setup_shortcuts()
         
     def setup_ui(self):
         """Setup dialog UI"""
@@ -48,14 +68,17 @@ class BBoxAnnotationDialog(QDialog):
         self.track_prefix_label = QLabel("")
         self.track_prefix_label.setStyleSheet("font-weight: bold; color: #333; min-width: 60px;")
         
-        # Number SpinBox (메인 윈도우와 동일한 방식)
-        self.track_number_spinbox = QSpinBox()
+        # Number SpinBox 
+        # self.track_number_spinbox = QSpinBox()
+        self.track_number_spinbox = CustomSpinBox(self)
         self.track_number_spinbox.setMinimum(1)
         self.track_number_spinbox.setMaximum(999)
         self.track_number_spinbox.setValue(1)
         self.track_number_spinbox.valueChanged.connect(self.on_track_number_changed)
         self.track_number_spinbox.setFixedWidth(80)
-        # 기본 스타일 유지 (커스텀 스타일 제거)
+
+        self.track_number_spinbox.setButtonSymbols(QSpinBox.ButtonSymbols.UpDownArrows)
+        self.track_number_spinbox.setFocus()
         
         # Arrow label
         arrow_label = QLabel("→")
@@ -65,6 +88,7 @@ class BBoxAnnotationDialog(QDialog):
         self.track_full_display = QLineEdit()
         self.track_full_display.setReadOnly(True)
         self.track_full_display.setStyleSheet("background-color: #f0f0f0;")
+        self.track_full_display.setFocusPolicy(Qt.NoFocus)
         
         # Add all to track layout
         track_layout.addWidget(self.track_prefix_label)
@@ -77,7 +101,7 @@ class BBoxAnnotationDialog(QDialog):
         # Buttons
         button_layout = QHBoxLayout()
         
-        self.ok_button = QPushButton("OK")
+        self.ok_button = QPushButton("OK (Enter/Space)")
         self.ok_button.clicked.connect(self.accept_annotation)
         
         self.cancel_button = QPushButton("Cancel")
@@ -91,6 +115,58 @@ class BBoxAnnotationDialog(QDialog):
         # Initialize with first object
         if self.available_objects:
             self.on_object_changed(self.available_objects[0])
+        
+        self.track_number_spinbox.setFocus()
+    
+    def setup_shortcuts(self):
+        """Setup keyboard shortcuts"""
+        # Enter key
+        self.ok_button.setDefault(True)
+        
+        # ESC key for cancel
+        self.escape_shortcut = QShortcut(QKeySequence(Qt.Key_Escape), self)
+        self.escape_shortcut.activated.connect(self.reject)
+        self.escape_shortcut.setContext(Qt.WidgetShortcut)
+    
+    def keyPressEvent(self, event):
+        """Handle key press events"""
+
+        # Enter & Space bar
+        if event.key() in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_Space):
+            if self.ok_button.isEnabled():
+                self.accept_annotation()
+                event.accept()
+                return
+
+        # ESC
+        elif event.key() == Qt.Key_Escape:
+            self.reject()
+            event.accept()
+            return
+        
+        # W: Increase Track ID
+        elif event.key() == Qt.Key_W:
+            current_value = self.track_number_spinbox.value()
+            max_value = self.track_number_spinbox.maximum()
+            if current_value < max_value:
+                self.track_number_spinbox.setValue(current_value+1)
+
+            print(f'Track ID increased to {self.track_number_spinbox.value()}')
+            event.accept()
+            return
+
+        # S: Decrease Track ID
+        elif event.key() == Qt.Key_S:
+            current_value = self.track_number_spinbox.value()
+            min_value = self.track_number_spinbox.minimum()
+            if current_value > min_value:
+                self.track_number_spinbox.setValue(current_value-1)
+
+            print(f'Track ID decreased to {self.track_number_spinbox.value()}')
+            event.accept()
+            return
+
+        super().keyPressEvent(event)
             
     def on_object_changed(self, object_type):
         """Handle object type change"""

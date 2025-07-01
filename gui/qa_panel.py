@@ -54,6 +54,8 @@ class QAPanel(QGroupBox):
         self.question_input = QTextEdit()
         self.question_input.setMaximumHeight(80)
         self.question_input.setPlaceholderText("Enter your question here...")
+        ## Tab Keymapping Overrride
+        self.question_input.keyPressEvent = self.question_key_press_event
         layout.addWidget(self.question_input)
         
         # Answer Input
@@ -61,6 +63,7 @@ class QAPanel(QGroupBox):
         self.answer_input = QTextEdit()
         self.answer_input.setMaximumHeight(80)
         self.answer_input.setPlaceholderText("Enter your answer here...")
+        self.answer_input.keyPressEvent = self.answer_key_press_event
         layout.addWidget(self.answer_input)
         
         # Grounded Objects
@@ -226,8 +229,6 @@ class QAPanel(QGroupBox):
             self.temporal_layout.addWidget(checkbox, row, col)
             self.temporal_checkboxes[i] = checkbox
 
-
-
     def save_current_qa(self):
         """Save current QA session"""
         question = self.question_input.toPlainText().strip()
@@ -260,34 +261,40 @@ class QAPanel(QGroupBox):
                 if hasattr(self, 'sampled_frames') and segment_index < len(self.sampled_frames):
                     time_frames.append(self.sampled_frames[segment_index])
         
-        # Create QA Data
-        qa_data = {
-            "qa_id": len(self.qa_sessions) + 1,
-            "question_category": category,
-            "question": question,
-            "answer": answer,
-            "grounded_objects": grounded_objects,
-            'temporal_grounding': {
-                'time_segment_indices': time_segments,
-                'frame_indices': time_frames
+        try:
+            # Create QA Data
+            qa_data = {
+                "qa_id": len(self.qa_sessions) + 1,
+                "question_category": category,
+                "question": question,
+                "answer": answer,
+                "grounded_objects": grounded_objects,
+                'temporal_grounding': {
+                    'time_segment_indices': time_segments,
+                    'frame_indices': time_frames
+                }
             }
-        }
-        
-        # Save to current index (modify) or add new
-        if self.current_qa_index < len(self.qa_sessions):
-            self.qa_sessions[self.current_qa_index] = qa_data
-            print(f"Updated QA {self.current_qa_index + 1}")
-        else:
-            self.qa_sessions.append(qa_data)
-            print(f"Saved new QA {len(self.qa_sessions)}")
-        
-        self.update_session_info()
-        self.update_navigation_buttons()
+            
+            # Save to current index (modify) or add new
+            if self.current_qa_index < len(self.qa_sessions):
+                self.qa_sessions[self.current_qa_index] = qa_data
+                print(f"Updated QA {self.current_qa_index + 1}")
+            else:
+                self.qa_sessions.append(qa_data)
+                print(f"Saved new QA {len(self.qa_sessions)}")
+            
+            self.update_session_info()
+            self.update_navigation_buttons()
 
-        # Signal: MainWindow gets notified for QA data change
-        self.qa_data_changed.emit(self.qa_sessions.copy())
-        
-        QMessageBox.information(self, "QA Saved", f"QA session saved successfully!")
+            # Signal: MainWindow gets notified for QA data change
+            self.qa_data_changed.emit(self.qa_sessions.copy())
+            
+            # Automatically create new QA
+            self.create_new_qa()
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Save Failed", f"Failed to save QA: {str(e)}")
+            print(f"Failed to save QA: {e}")
     
     def create_new_qa(self):
         """Create new QA session"""
@@ -453,3 +460,31 @@ class QAPanel(QGroupBox):
         
         self.save_qa_btn.setEnabled(False)
         self.new_qa_btn.setEnabled(False)
+    
+    def question_key_press_event(self, event):
+        """Tab Key for moving cursor from question -> answer"""
+        is_tab_key = (event.key() == Qt.Key_Tab)
+        is_shift_pressed = bool(event.modifiers() & Qt.ShiftModifier)
+
+        if is_tab_key and not is_shift_pressed:
+            self.answer_input.setFocus()
+            print("Moved Focus: Question -> Answer")
+
+            event.accept()
+            return
+        
+        QTextEdit.keyPressEvent(self.question_input, event)
+    
+    def answer_key_press_event(self, event):
+        """Handle key press events for answer input"""
+        is_tab_key = (event.key() == Qt.Key_Tab)
+        is_shift_pressed = bool(event.modifiers() & Qt.ShiftModifier)
+
+        if is_tab_key and is_shift_pressed:
+            self.question_input.setFocus()
+            print("Moved Focus: Answer -> Question (Shift+Tab)")
+
+            event.accept()
+            return
+        
+        QTextEdit.keyPressEvent(self.answer_input, event)

@@ -23,7 +23,7 @@ class ObjectPanel(QGroupBox):
     """Object selection panel placeholder"""
 
     def __init__(self):
-        super().__init__("Object Categories")
+        super().__init__("1. Object Categories")
         self.setFixedWidth(HALF_PANEL_WIDTH)
         self.setMaximumHeight(320)
 
