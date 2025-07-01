@@ -956,6 +956,7 @@ class MainWindow(QMainWindow):
         
         # Add QA data
         annotation_data = self.current_annotation_data.copy()
+        annotation_data['annotations'] = self.video_canvas.frame_bboxes.copy()
         if hasattr(self, 'qa_panel'):
             annotation_data["qa_data"] = self.qa_panel.get_all_qa_data()
         

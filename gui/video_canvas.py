@@ -27,6 +27,7 @@ class VideoCanvas(QLabel):
         self.total_frames = 0
         self.fps = 0
         self.video_resolution = (0, 0)
+        self.current_frame_data = None # np.ndarray RGB Pixel data
 
         # Bounding box annotation state
         self.bbox_mode = False
@@ -73,10 +74,15 @@ class VideoCanvas(QLabel):
             self.total_frames = int(self.video_cap.get(cv2.CAP_PROP_FRAME_COUNT))
             self.fps = self.video_cap.get(cv2.CAP_PROP_FPS)
             self.current_frame = 0
-            self.set_frame(0)
-            self.video_resolution = (self.original_width, self.original_height)
-            return True
 
+            # Load first frame and get dimensions
+            self.set_frame(0)
+
+            # Set video resolution metadata after loading first frame
+            if self.current_frame_data is not None:
+                self.video_resolution = (self.original_width, self.original_height)
+
+            return True
         return False
 
     def set_frame(self, frame_index):
@@ -90,34 +96,55 @@ class VideoCanvas(QLabel):
         if ret:
             self.current_frame = frame_index
 
-            # Convert BGR to RGB
-            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            h, w, ch = rgb_frame.shape
-            bytes_per_line = ch * w
+            # Convert BGR to RGB and store current frame data
+            self.current_frame_data = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            h, w, ch  = self.current_frame_data.shape
 
-            # Store Original image size
             self.original_width = w
             self.original_height = h
 
-            # Create QImage and scale to fit canvas
-            qt_image = QImage(
-                rgb_frame.data, w, h, bytes_per_line, QImage.Format_RGB888
-            )
-            canvas_size = self.size()
-            scaled_pixmap = QPixmap.fromImage(qt_image).scaled(
-                canvas_size, Qt.KeepAspectRatio, Qt.SmoothTransformation
-            )
-
-            # Calculate actual scale factor
-            self.scale_factor = min(
-                canvas_size.width() / w,
-                canvas_size.height() / h
-            )
-
-            self.setPixmap(scaled_pixmap)
+            # Update display with current canvas size
+            self.update_display()
 
             return True
         return False
+
+    def update_display(self):
+        """Update video display with current canvas size"""
+        if self.current_frame_data is None:
+            return
+        
+        h, w, ch = self.current_frame_data.shape
+        bytes_per_line = ch * w
+
+        # Create QImage from current frame data
+        qt_image = QImage(
+            self.current_frame_data.data, w, h, bytes_per_line, QImage.Format_RGB888
+        )
+        
+        # Get current canvas size
+        canvas_size = self.size()
+        
+        # Scale to fit current canvas while maintaining aspect ratio
+        scaled_pixmap = QPixmap.fromImage(qt_image).scaled(
+            canvas_size, Qt.KeepAspectRatio, Qt.SmoothTransformation
+        )
+
+        # Calculate current scale factor
+        self.scale_factor = min(
+            canvas_size.width() / w,
+            canvas_size.height() / h
+        )
+
+        self.setPixmap(scaled_pixmap)
+
+    def resizeEvent(self, event):
+        """Handle resize events to update video display"""
+        super().resizeEvent(event)
+        
+        # Update video display when canvas is resized
+        if self.current_frame_data is not None:
+            self.update_display()
 
     def enable_bbox_mode(self, available_objects):
         """Enable bbox annotation mode"""
@@ -142,6 +169,31 @@ class VideoCanvas(QLabel):
     
     def add_bbox_with_annotation(self, x, y, width, height, object_type, track_id):
         """Add annotated bounding box to current frame"""
+        # 최종 경계체크 및 보정
+        x = max(0, min(x, self.original_width - 1))
+        y = max(0, min(y, self.original_height - 1))
+
+        # 너비/높이가 경계를 벗어나지 않도록 조정
+        if x + width > self.original_width:
+            width = self.original_width - x
+        if y + height > self.original_height:
+            height = self.original_height - y
+
+        width = max(10, width)
+        height = max(10, height)
+
+        # 보정 후에도 경계를 벗어나는 경우 처리
+        if x + width > self.original_width:
+            x = self.original_width - width
+        if y + height > self.original_height:
+            y = self.original_height - height
+        
+        # 최종 검증
+        if x < 0 or y < 0 or x + width > self.original_width or y + height > self.original_height:
+            print(f" Invalid bbox after correction: x={x}, y={y}, w={width}, h={height}")
+            print(f" Image bounds: {self.original_width}x{self.original_height}")
+            return False
+
         # Assign color if new track_id
         if track_id not in self.track_registry:
             self.track_registry[track_id] = self.get_next_color()
@@ -554,7 +606,7 @@ class VideoCanvas(QLabel):
         self.selected_bbox['y'] = new_y
 
     def handle_bbox_resize(self, canvas_point):
-        """BBox 리사이즈 처리"""
+        """BBox 리사이즈 처리 - 완전한 경계 체크"""
         if not self.resize_start_img or not self.selected_bbox:
             return
         
@@ -563,7 +615,7 @@ class VideoCanvas(QLabel):
         if not current_img:
             return
         
-        # 원본 BBox 좌표
+        # 원본 BBox 좌표 (리사이즈 시작 시점)
         orig_x = self.original_bbox['x']
         orig_y = self.original_bbox['y']
         orig_width = self.original_bbox['width']
@@ -577,6 +629,7 @@ class VideoCanvas(QLabel):
             new_width = (orig_x + orig_width) - new_x
             new_height = (orig_y + orig_height) - new_y
             
+            # 경계 체크
             self.selected_bbox['x'] = max(0, new_x)
             self.selected_bbox['y'] = max(0, new_y)
             self.selected_bbox['width'] = max(10, new_width)
@@ -588,6 +641,7 @@ class VideoCanvas(QLabel):
             new_y = min(current_img[1], orig_y + orig_height - 10)
             new_height = (orig_y + orig_height) - new_y
             
+            # 경계 체크
             self.selected_bbox['y'] = max(0, new_y)
             self.selected_bbox['width'] = max(10, min(new_width, self.original_width - orig_x))
             self.selected_bbox['height'] = max(10, new_height)
@@ -598,6 +652,7 @@ class VideoCanvas(QLabel):
             new_width = (orig_x + orig_width) - new_x
             new_height = current_img[1] - orig_y
             
+            # 경계 체크
             self.selected_bbox['x'] = max(0, new_x)
             self.selected_bbox['width'] = max(10, new_width)
             self.selected_bbox['height'] = max(10, min(new_height, self.original_height - orig_y))
@@ -607,6 +662,7 @@ class VideoCanvas(QLabel):
             new_width = current_img[0] - orig_x
             new_height = current_img[1] - orig_y
             
+            # 경계 체크
             self.selected_bbox['width'] = max(10, min(new_width, self.original_width - orig_x))
             self.selected_bbox['height'] = max(10, min(new_height, self.original_height - orig_y))
             
@@ -615,26 +671,44 @@ class VideoCanvas(QLabel):
             new_y = min(current_img[1], orig_y + orig_height - 10)
             new_height = (orig_y + orig_height) - new_y
             
+            # 경계 체크
             self.selected_bbox['y'] = max(0, new_y)
             self.selected_bbox['height'] = max(10, new_height)
             
         elif self.resize_handle == 'edge_bottom':
-            # 아래쪽 모서리
-            new_height = current_img[1] - orig_y
-            self.selected_bbox['height'] = max(10, min(new_height, self.original_height - orig_y))
+            # 아래쪽 모서리 - 완전 수정
+            current_y = self.selected_bbox['y']  # 현재 y 좌표 사용
+            new_height = current_img[1] - current_y
+            max_height = self.original_height - current_y  # 현재 y 기준 최대 높이
+            self.selected_bbox['height'] = max(10, min(new_height, max_height))
             
         elif self.resize_handle == 'edge_left':
             # 왼쪽 모서리
             new_x = min(current_img[0], orig_x + orig_width - 10)
             new_width = (orig_x + orig_width) - new_x
             
+            # 경계 체크
             self.selected_bbox['x'] = max(0, new_x)
             self.selected_bbox['width'] = max(10, new_width)
             
         elif self.resize_handle == 'edge_right':
-            # 오른쪽 모서리
-            new_width = current_img[0] - orig_x
-            self.selected_bbox['width'] = max(10, min(new_width, self.original_width - orig_x))
+            # 오른쪽 모서리 - 완전 수정
+            current_x = self.selected_bbox['x']  # 현재 x 좌표 사용
+            new_width = current_img[0] - current_x
+            max_width = self.original_width - current_x  # 현재 x 기준 최대 너비
+            self.selected_bbox['width'] = max(10, min(new_width, max_width))
+
+        # 추가 안전장치: 최종 경계 체크
+        # 어떤 리사이즈든 결국 경계를 벗어나면 안 됨
+        if self.selected_bbox['x'] + self.selected_bbox['width'] > self.original_width:
+            self.selected_bbox['width'] = self.original_width - self.selected_bbox['x']
+        
+        if self.selected_bbox['y'] + self.selected_bbox['height'] > self.original_height:
+            self.selected_bbox['height'] = self.original_height - self.selected_bbox['y']
+        
+        # 디버그 로그
+        x, y, w, h = self.selected_bbox['x'], self.selected_bbox['y'], self.selected_bbox['width'], self.selected_bbox['height']
+        print(f"Resized: x={x}, y={y}, w={w}, h={h} | x+w={x+w}, y+h={y+h} | Bounds: {self.original_width}x{self.original_height}")
 
     def mouseReleaseEvent(self, event):
         """Handle mouse release for bbox completion and editing end"""
@@ -665,10 +739,20 @@ class VideoCanvas(QLabel):
             y = min(start_img[1], end_img[1])
             width = abs(end_img[0] - start_img[0])
             height = abs(end_img[1] - start_img[1])
+
+            x = max(0, x)
+            y = max(0, y)
+            if x + width > self.original_width:
+                width = self.original_width - x
+            if y + height > self.original_height:
+                height = self.original_height - y
             
             # Only add if bbox has minimum size
             if width > 10 and height > 10:
+                print(f"Creating bbox: x={x}, y={y}, w={width}, h={height} (bounded)")
                 self.show_annotation_dialog(x, y, width, height)
+            else:
+                print(f"Bbox too small or invalid after boundary check: w={width}, h={height}")
 
     def complete_bbox_editing(self):
         """BBox 편집 완료"""
@@ -687,21 +771,31 @@ class VideoCanvas(QLabel):
         """Paint event to draw bboxes and preview"""
         super().paintEvent(event)
         
-        if not self.pixmap():
+        if not self.pixmap() or not self.bbox_mode:
             return
         
         painter = QPainter(self)
+
+        if not painter.isActive():
+            return
+
+        try:
+            # Draw existing bboxes
+            self.draw_existing_bboxes(painter)
         
-        # Draw existing bboxes
-        self.draw_existing_bboxes(painter)
-        
-        # Draw preview bbox while drawing
-        if self.is_drawing and self.start_point and self.end_point:
-            self.draw_preview_bbox(painter)
+            # Draw preview bbox while drawing
+            if self.is_drawing and self.start_point and self.end_point:
+                self.draw_preview_bbox(painter)
+        finally:
+            if painter.isActive():
+                painter.end()
 
     def draw_existing_bboxes(self, painter):
         """Draw all existing bboxes for current frame"""
         if self.current_frame not in self.frame_bboxes:
+            return
+        
+        if not painter.isActive():
             return
         
         for i, bbox in enumerate(self.frame_bboxes[self.current_frame]):
@@ -743,10 +837,12 @@ class VideoCanvas(QLabel):
                 if is_selected:
                     self.draw_resize_handles(painter, top_left, bottom_right, bright_color)
 
-
     def draw_resize_handles(self, painter, top_left, bottom_right, color):
         """선택된 BBox의 리사이즈 핸들 그리기"""
         
+        if not painter.isActive():
+            return
+
         left, top = top_left
         right, bottom = bottom_right
         
