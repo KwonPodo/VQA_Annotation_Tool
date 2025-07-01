@@ -147,28 +147,17 @@ class MainWindow(QMainWindow):
         self.frame_info_label = QLabel("Frame: - / -")
         self.frame_info_label.setAlignment(Qt.AlignCenter)
 
-        # Frame step controls
-        step_layout = QHBoxLayout()
-        step_layout.addWidget(QLabel('Frame Step:'))
-        self.frame_step_input = QSpinBox()
-        self.frame_step_input.setMinimum(1)
-        self.frame_step_input.setMaximum(100)
-        self.frame_step_input.setValue(1)
-        self.frame_step_input.setSuffix(" frames")
-        step_layout.addWidget(self.frame_step_input)
-        step_layout.addStretch()
-
         # Navigation buttons
         nav_layout = QHBoxLayout()
-        self.prev_frame_btn = QPushButton("◀ Previous Frame")
-        self.next_frame_btn = QPushButton("Next Frame ▶")
+        self.prev_frame_btn = QPushButton("◀ Previous Frame (D, C)")
+        self.next_frame_btn = QPushButton("Next Frame (F, V) ▶")
         nav_layout.addWidget(self.prev_frame_btn)
         nav_layout.addWidget(self.next_frame_btn)
 
         # Segment buttons
         segment_layout = QHBoxLayout()
-        self.prev_segment_btn = QPushButton("◀◀ Previous Segment")
-        self.next_segment_btn = QPushButton("Next Segment ▶▶")
+        self.prev_segment_btn = QPushButton("◀◀ Previous Segment (D, C)")
+        self.next_segment_btn = QPushButton("Next Segment (F, V) ▶▶")
 
         self.prev_segment_btn.setEnabled(False)
         self.next_segment_btn.setEnabled(False)
@@ -177,7 +166,6 @@ class MainWindow(QMainWindow):
         segment_layout.addWidget(self.next_segment_btn)
 
         video_controls_layout.addWidget(self.frame_info_label)
-        video_controls_layout.addLayout(step_layout)
         video_controls_layout.addLayout(nav_layout)
         video_controls_layout.addLayout(segment_layout)
 
@@ -308,20 +296,14 @@ class MainWindow(QMainWindow):
         self.load_annotation_btn.clicked.connect(self.load_annotation)
 
         # Video controls
-        self.prev_frame_btn.clicked.connect(self.prev_frame)
-        self.next_frame_btn.clicked.connect(self.next_frame)
+        self.prev_frame_btn.clicked.connect(self.navigate_prev)
+        self.next_frame_btn.clicked.connect(self.navigate_next)
         self.prev_segment_btn.clicked.connect(self.prev_segment)
         self.next_segment_btn.clicked.connect(self.next_segment)
 
         # Annotation controls
         self.annotation_panel.apply_segment_btn.clicked.connect(self.apply_time_segment)
         self.annotation_panel.undo_segment_btn.clicked.connect(self.undo_time_segment)
-        self.annotation_panel.frame_mode_btn.clicked.connect(
-            lambda: self.set_navigation_mode("frame")
-        )
-        self.annotation_panel.segment_mode_btn.clicked.connect(
-            lambda: self.set_navigation_mode("segment")
-        )
 
         # Action buttons
         self.start_annotation_btn.clicked.connect(self.start_annotation)
@@ -335,8 +317,6 @@ class MainWindow(QMainWindow):
         # Object Panel selection change detector
         self.object_panel.connect_selection_changed(self.on_object_selection_changed)
 
-        # SpinBox Focus
-        self.frame_step_input.editingFinished.connect(lambda: self.setFocus())
         self.annotation_panel.start_frame_input.editingFinished.connect(lambda: self.setFocus())
         self.annotation_panel.end_frame_input.editingFinished.connect(lambda: self.setFocus())
         self.annotation_panel.interval_input.editingFinished.connect(lambda: self.setFocus())
@@ -346,14 +326,27 @@ class MainWindow(QMainWindow):
 
     def setup_keyboard_shortcuts(self):
         """Setup keyboard shortcuts"""
-        # Frame navigation
-        self.left_shortcut = QShortcut(QKeySequence(Qt.Key_Left), self)
-        self.left_shortcut.activated.connect(self.navigate_left)
-        self.left_shortcut.setContext(Qt.ApplicationShortcut)
 
-        self.right_shortcut = QShortcut(QKeySequence(Qt.Key_Right), self)
-        self.right_shortcut.activated.connect(self.navigate_right)
-        self.right_shortcut.setContext(Qt.ApplicationShortcut)
+        # D Mapping: Prev Frame
+        self.d_shortcut = QShortcut(QKeySequence(Qt.Key_D), self)
+        self.d_shortcut.activated.connect(self.navigate_prev)
+        self.d_shortcut.setContext(Qt.ApplicationShortcut)
+
+        # F Mapping: Next Frame
+        self.f_shortcut = QShortcut(QKeySequence(Qt.Key_F), self)
+        self.f_shortcut.activated.connect(self.navigate_next)
+        self.f_shortcut.setContext(Qt.ApplicationShortcut)
+
+        # C Mapping: Next Frame
+        self.c_shortcut = QShortcut(QKeySequence(Qt.Key_C), self)
+        self.c_shortcut.activated.connect(lambda: self.prev_n_frame(10))
+        self.c_shortcut.setContext(Qt.ApplicationShortcut)
+
+        # V Mapping: Next Frame
+        self.v_shortcut = QShortcut(QKeySequence(Qt.Key_V), self)
+        self.v_shortcut.activated.connect(lambda: self.next_n_frame(10))
+        self.v_shortcut.setContext(Qt.ApplicationShortcut)
+
 
         # Other shortcuts
         self.save_shortcut = QShortcut(QKeySequence("Ctrl+S"), self)
@@ -391,13 +384,30 @@ class MainWindow(QMainWindow):
                 print(f"Failed to load video: {file_path}")
 
     def update_frame_info(self):
-        """Update frame information display"""
-        if self.video_canvas.video_cap:
-            current = self.video_canvas.current_frame + 1
-            total = self.video_canvas.total_frames
-            self.frame_info_label.setText(f"Frame: {current} / {total}")
-        else:
-            self.frame_info_label.setText("Frame: - / -")
+        """Update frame information display 0-Indexing"""
+
+        if not self.video_canvas.video_cap:
+            self.frame_info_label.setText('Frame: - / -')
+            return
+        
+        # Frame Index Info
+        current = self.video_canvas.current_frame
+        total = self.video_canvas.total_frames
+        frame_info = f"Frame: {current} / {total-1}"
+    
+        # Segment Index Info
+        if self.sampled_frames:
+            if current in self.sampled_frames:
+                segment_index = self.sampled_frames.index(current)
+                segment_total = len(self.sampled_frames)
+                segment_info = f' | Segment: {segment_index} / {segment_total - 1}'
+            else:
+                segment_total = len(self.sampled_frames)
+                segment_info = f' | Segment: - / {segment_total - 1}'
+
+            frame_info += segment_info
+
+        self.frame_info_label.setText(frame_info)
 
     def reset_annotation_state(self):
         """Reset annotation state"""
@@ -615,17 +625,29 @@ class MainWindow(QMainWindow):
         self.video_canvas.update()
         print(f"Rebuilt registries: {len(self.video_canvas.track_registry)} tracks")
 
-    def prev_frame(self):
-        """Go to previous frame"""
-        step = self.frame_step_input.value()
-        target_frame = max(0, self.video_canvas.current_frame - step)
+    def navigate_prev(self):
+        # Segment mode
+        if self.sampled_frames:
+            self.prev_segment()
+        else: # Frame mode
+            self.prev_n_frame(1)
+
+    def navigate_next(self):
+        # segment mode
+        if self.sampled_frames:
+            self.next_segment()
+        else: # frame mode
+            self.next_n_frame(1)
+
+    def prev_n_frame(self, n):
+        """Go to previous n-frame"""
+        target_frame = max(0, self.video_canvas.current_frame - n)
         if self.video_canvas.set_frame(target_frame):
             self.update_frame_info()
 
-    def next_frame(self):
-        """Go to next frame"""
-        step = self.frame_step_input.value()
-        target_frame = min(self.video_canvas.total_frames - 1, self.video_canvas.current_frame + step)
+    def next_n_frame(self, n):
+        """Go to next n-frame"""
+        target_frame = min(self.video_canvas.total_frames - 1, self.video_canvas.current_frame + n)
         if self.video_canvas.set_frame(target_frame):
             self.update_frame_info()
 
@@ -637,7 +659,7 @@ class MainWindow(QMainWindow):
             self.video_canvas.set_frame(frame_num)
             self.update_frame_info()
             print(
-                f"Navigated to segment {self.current_segment_index + 1} of {len(self.sampled_frames)} (frame {frame_num})"
+                f"Navigated to segment {self.current_segment_index} of {len(self.sampled_frames) - 1} (frame {frame_num})"
             )
 
     def next_segment(self):
@@ -651,7 +673,7 @@ class MainWindow(QMainWindow):
             self.video_canvas.set_frame(frame_num)
             self.update_frame_info()
             print(
-                f"Navigated to segment {self.current_segment_index + 1} of {len(self.sampled_frames)} (frame {frame_num})"
+                f"Navigated to segment {self.current_segment_index} of {len(self.sampled_frames) - 1} (frame {frame_num})"
             )
 
     def apply_time_segment(self):
@@ -692,7 +714,7 @@ class MainWindow(QMainWindow):
         self.annotation_panel.update_segment_info(sampled_frames)
 
         # Switch to segment mode
-        self.set_navigation_mode("segment")
+        self.navigation_mode = 'segment'
 
         # Enable undo button
         self.annotation_panel.undo_segment_btn.setEnabled(True)
@@ -703,12 +725,16 @@ class MainWindow(QMainWindow):
         # Update Butto State
         self.on_object_selection_changed()
 
+        # Update QA Panel with time segment info
+        if hasattr(self, 'qa_panel'):
+            self.qa_panel.set_available_time_segments(sampled_frames)
+
         print(f"Applied time segment: {start_frame}-{end_frame}, interval: {interval}")
         print(f"Sampled frames: {sampled_frames}")
 
     def undo_time_segment(self):
         """Undo time segment"""
-        self.set_navigation_mode("frame")
+        self.navigation_mode = 'frame'
 
         self.sampled_frames = []
         self.current_segment_index = 0
@@ -725,30 +751,6 @@ class MainWindow(QMainWindow):
         self.on_object_selection_changed()
 
         print("Undo time segment sampling - return to frame navigation mode")
-
-    def set_navigation_mode(self, mode):
-        """Set navigation mode (frame or segment)"""
-        self.navigation_mode = mode
-        self.annotation_panel.set_navigation_mode(mode)
-
-        if mode == "segment":
-            print("Switched to segment navigation mode (arrow keys = segments)")
-        else:
-            print("Switched to frame navigation mode (arrow keys = frames)")
-
-    def navigate_left(self):
-        """Navigate left based on current mode"""
-        if self.navigation_mode == "segment":
-            self.prev_segment()
-        else:
-            self.prev_frame()
-
-    def navigate_right(self):
-        """Navigate right based on current mode"""
-        if self.navigation_mode == "segment":
-            self.next_segment()
-        else:
-            self.next_frame()
 
     def start_annotation(self):
         """Start Annotation (If current annotation is ongoing, ask for confirmation)"""
@@ -803,6 +805,7 @@ class MainWindow(QMainWindow):
 
         if hasattr(self, 'qa_panel'):
             self.qa_panel.reset_qa_panel()
+            self.qa_panel.set_available_time_segments(self.sampled_frames)
 
         # Update UI state
         self.start_bbox_btn.setEnabled(True)
@@ -877,7 +880,7 @@ class MainWindow(QMainWindow):
             self.update_frame_info()
             
             # Change to segment mode
-            self.set_navigation_mode("segment")
+            self.navigation_mode = 'segment'
         
         # Update button states
         self.start_bbox_btn.setEnabled(False)

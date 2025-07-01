@@ -73,7 +73,7 @@ class QAPanel(QGroupBox):
         scroll_area.setFixedHeight(120)
         scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        
+
         self.grounded_widget = QWidget()
         self.grounded_layout = QGridLayout(self.grounded_widget)
         self.grounded_layout.setSpacing(2)
@@ -84,6 +84,28 @@ class QAPanel(QGroupBox):
         self.grounded_checkboxes = {}
         
         layout.addWidget(grounded_group)
+
+        # Time Segment Grounding for QAs
+        temporal_group = QGroupBox('Time Segment Grounding')
+        temporal_layout = QVBoxLayout(temporal_group)
+
+        # Scroll Area for Time Segment Grounding
+        temporal_scroll_area = QScrollArea()
+        temporal_scroll_area.setWidgetResizable(True)
+        temporal_scroll_area.setFixedHeight(120)
+        temporal_scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        temporal_scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+
+        self.temporal_widget = QWidget()
+        self.temporal_layout = QGridLayout(self.temporal_widget)
+        self.temporal_layout.setSpacing(2)
+
+        temporal_scroll_area.setWidget(self.temporal_widget)
+        temporal_layout.addWidget(temporal_scroll_area)
+
+        self.temporal_checkboxes = {}
+
+        layout.addWidget(temporal_group)
         
         # Buttons
         button_layout = QHBoxLayout()
@@ -175,6 +197,37 @@ class QAPanel(QGroupBox):
             self.grounded_layout.addWidget(checkbox, row, col)
             self.grounded_checkboxes[track_id] = checkbox
     
+    def set_available_time_segments(self, sampled_frames):
+        """Update available time segments for grounding"""
+        self.sampled_frames = sampled_frames
+        self.update_time_segment_list()
+    
+    def update_time_segment_list(self):
+        """Update time segment checkboxes"""
+        # Clear existing checkboxes
+        for i in reversed(range(self.temporal_layout.count())):
+            child = self.temporal_layout.itemAt(i)
+            if child and child.widget():
+                child.widget().setParent(None)
+        
+        self.temporal_checkboxes.clear()
+
+        if not hasattr(self, 'sampled_frames') or not self.sampled_frames:
+            no_segments_label = QLabel("No segments available")
+            no_segments_label.setStyleSheet("color: #666; font-style: italic;")
+            self.temporal_layout.addWidget(no_segments_label, 0, 0)
+            return
+        
+        # Create Checkboxes for each time segment
+        for i, frame_index in enumerate(self.sampled_frames):
+            checkbox = QCheckBox(f'Seg {i} (Frame {frame_index})')
+            row = i // 2
+            col = i % 2
+            self.temporal_layout.addWidget(checkbox, row, col)
+            self.temporal_checkboxes[i] = checkbox
+
+
+
     def save_current_qa(self):
         """Save current QA session"""
         question = self.question_input.toPlainText().strip()
@@ -198,13 +251,26 @@ class QAPanel(QGroupBox):
             if result == QMessageBox.No:
                 return
         
+        # Collect selected time segments
+        time_segments = []
+        time_frames = []
+        for segment_index, checkbox in self.temporal_checkboxes.items():
+            if checkbox.isChecked():
+                time_segments.append(segment_index)
+                if hasattr(self, 'sampled_frames') and segment_index < len(self.sampled_frames):
+                    time_frames.append(self.sampled_frames[segment_index])
+        
         # Create QA Data
         qa_data = {
             "qa_id": len(self.qa_sessions) + 1,
             "question_category": category,
             "question": question,
             "answer": answer,
-            "grounded_objects": grounded_objects
+            "grounded_objects": grounded_objects,
+            'temporal_grounding': {
+                'time_segment_indices': time_segments,
+                'frame_indices': time_frames
+            }
         }
         
         # Save to current index (modify) or add new
@@ -281,6 +347,9 @@ class QAPanel(QGroupBox):
         # Clear all checkboxes
         for checkbox in self.grounded_checkboxes.values():
             checkbox.setChecked(False)
+        
+        for checkbox in self.temporal_checkboxes.values():
+            checkbox.setChecked(False)
     
     def has_unsaved_changes(self):
         """Check if current QA has unsaved changes"""
@@ -327,6 +396,12 @@ class QAPanel(QGroupBox):
             # grounded objects 체크
             for track_id, checkbox in self.grounded_checkboxes.items():
                 checkbox.setChecked(track_id in qa["grounded_objects"])
+            
+            # temporal grounding 체크
+            temporal_grounding = qa.get('temporal_grounding', {})
+            segment_indices = temporal_grounding.get('time_segment_indices', [])
+            for segment_idx, checkbox in self.temporal_checkboxes.items():
+                checkbox.setChecked(segment_idx in segment_indices)
     
     def update_session_info(self):
         """Update session info display"""

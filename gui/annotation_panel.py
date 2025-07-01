@@ -90,24 +90,9 @@ class AnnotationPanel(QGroupBox):
             "color: #666; font-style: italic; margin: 5px 0;"
         )
 
-        # Navigation mode controls
-        nav_group = QGroupBox("Navigation Mode")
-        nav_layout = QVBoxLayout(nav_group)
-        nav_layout.setSpacing(8)
-        nav_layout.setContentsMargins(10, 15, 10, 15)
-
-        self.frame_mode_btn = QPushButton("Switch to Frame Mode")
-        self.segment_mode_btn = QPushButton("Switch to Segment Mode")
-        self.frame_mode_btn.setEnabled(False)
-        self.segment_mode_btn.setEnabled(False)
-
-        nav_layout.addWidget(self.frame_mode_btn)
-        nav_layout.addWidget(self.segment_mode_btn)
-
         # Add to main layout
         layout.addWidget(segment_input_group)
         layout.addWidget(self.segment_info_label)
-        layout.addWidget(nav_group)
         layout.addStretch()
 
     def set_video_info(self, total_frames):
@@ -134,20 +119,14 @@ class AnnotationPanel(QGroupBox):
             self.segment_info_label.setText(
                 f"Segment: {start}-{end}\n{count} sampled frames"
             )
-            self.segment_mode_btn.setEnabled(True)
         else:
             self.segment_info_label.setText("No segment selected")
-            self.segment_mode_btn.setEnabled(False)
 
     def set_navigation_mode(self, mode):
         """Update navigation mode display"""
         if mode == "frame":
             self.mode_label.setText("Mode: Frame Navigation")
             self.mode_label.setStyleSheet("font-weight: bold; color: #333;")
-            self.frame_mode_btn.setEnabled(False)
-            self.segment_mode_btn.setEnabled(True)
         elif mode == "segment":
             self.mode_label.setText("Mode: Segment Navigation")
             self.mode_label.setStyleSheet("font-weight: bold; color: #007acc;")
-            self.frame_mode_btn.setEnabled(True)
-            self.segment_mode_btn.setEnabled(False)

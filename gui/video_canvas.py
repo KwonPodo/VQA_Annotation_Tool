@@ -25,6 +25,7 @@ class VideoCanvas(QLabel):
         self.current_frame = 0
         self.total_frames = 0
         self.fps = 0
+        self.video_resolution = (0, 0)
 
         # Bounding box annotation state
         self.bbox_mode = False
@@ -55,6 +56,7 @@ class VideoCanvas(QLabel):
             self.fps = self.video_cap.get(cv2.CAP_PROP_FPS)
             self.current_frame = 0
             self.set_frame(0)
+            self.video_resolution = (self.original_width, self.original_height)
             return True
 
         return False
