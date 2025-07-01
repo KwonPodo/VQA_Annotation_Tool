@@ -69,7 +69,6 @@ class BBoxAnnotationDialog(QDialog):
         self.track_prefix_label.setStyleSheet("font-weight: bold; color: #333; min-width: 60px;")
         
         # Number SpinBox 
-        # self.track_number_spinbox = QSpinBox()
         self.track_number_spinbox = CustomSpinBox(self)
         self.track_number_spinbox.setMinimum(1)
         self.track_number_spinbox.setMaximum(999)

@@ -44,13 +44,6 @@ class MainWindow(QMainWindow):
         self.sampled_frames = []
         self.current_segment_index = 0
 
-        # Navigation mode : 'frame' or 'segment'
-        self.navigation_mode = "frame"
-
-        # Bbox Annotation State
-        self.bbox_annotation_active = False
-        self.selected_objects_for_bbox = []
-
         # Current Video and Annotation Data
         self.current_video_name = None
         self.current_annotation_data = None
@@ -406,30 +399,13 @@ class MainWindow(QMainWindow):
         self.next_segment_btn.setEnabled(False)
 
         self.current_annotation_data = None
-        self.bbox_annotation_active = False
-        self.selected_objects_for_bbox = []
+        self.video_canvas.disable_bbox_mode()
 
         # Reset Button State
         self.new_grounding_btn.setEnabled(True)
         self.save_annotation_btn.setEnabled(False)
         self.save_as_btn.setEnabled(False)
         self.undo_bbox_btn.setEnabled(False)
-
-    def enable_segment_navigation(self, sampled_frames):
-        """Enable segment navigation with sampled frames"""
-        self.sampled_frames = sampled_frames
-        self.current_segment_index = 0
-
-        if len(self.sampled_frames) > 1:
-            self.prev_segment_btn.setEnabled(True)
-            self.next_segment_btn.setEnabled(True)
-
-            if self.sampled_frames:
-                self.video_canvas.set_frame(self.sampled_frames[0])
-                self.update_frame_info()
-                print(
-                    f"Segment navigation enabled with {len(self.sampled_frames)} segments"
-                )
 
     def save_annotation(self):
         """Save annotation - 첫 저장시 Save As 처럼 동작"""
@@ -577,8 +553,7 @@ class MainWindow(QMainWindow):
     def reset_for_new_grounding(self):
         """Reset UI state for new grounding while keeping video loaded"""
         # Stop any active bbox annotation
-        if self.bbox_annotation_active:
-            self.bbox_annotation_active = False
+        if self.video_canvas.bbox_mode:
             self.video_canvas.disable_bbox_mode()
         
         # Reset annotation data
@@ -594,7 +569,6 @@ class MainWindow(QMainWindow):
         self.video_canvas.update()  # Refresh display
         
         # Reset navigation
-        self.navigation_mode = "frame"
         self.prev_segment_btn.setEnabled(False)
         self.next_segment_btn.setEnabled(False)
         
@@ -604,7 +578,6 @@ class MainWindow(QMainWindow):
         
         # Reset annotation panel
         self.annotation_panel.undo_segment_btn.setEnabled(False)
-        self.annotation_panel.update_segment_info([])
         self.annotation_panel.set_navigation_mode('frame')
         
         # Reset QA panel
@@ -794,22 +767,17 @@ class MainWindow(QMainWindow):
         self.next_segment_btn.setEnabled(True)
 
         # 6. Activate BBox Annotation Mode
-        self.bbox_annotation_active = True
-        self.selected_objects_for_bbox = selected_objects.copy()
-
         self.video_canvas.frame_bboxes = {}
         self.video_canvas.existing_track_ids = {}
         self.video_canvas.track_registry = {}
         self.video_canvas.color_index = 0
-        self.video_canvas.enable_bbox_mode(self.selected_objects_for_bbox)
+        self.video_canvas.enable_bbox_mode(selected_objects)
 
         # Move to Segment 0
         self.video_canvas.set_frame(sampled_frames[0])
         self.update_frame_info()
-        self.navigation_mode = 'segment'
 
         # Update UI
-        self.annotation_panel.update_segment_info(sampled_frames)
         self.annotation_panel.undo_segment_btn.setEnabled(True)
         self.annotation_panel.set_navigation_mode('segment')
 
@@ -833,7 +801,6 @@ class MainWindow(QMainWindow):
 
     def undo_time_segment(self):
         """Undo time segment"""
-        self.navigation_mode = 'frame'
 
         self.sampled_frames = []
         self.current_segment_index = 0
@@ -842,7 +809,6 @@ class MainWindow(QMainWindow):
         self.next_segment_btn.setEnabled(False)
 
         self.annotation_panel.undo_segment_btn.setEnabled(False)
-        self.annotation_panel.update_segment_info([])
 
         self.setFocus()
 
@@ -959,7 +925,7 @@ class MainWindow(QMainWindow):
 
     def undo_last_bbox(self):
         """Remove last bbox on current frame"""
-        if not self.bbox_annotation_active:
+        if not self.video_canvas.bbox_mode:
             return
         
         if self.video_canvas.undo_last_bbox():

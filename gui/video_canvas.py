@@ -1,5 +1,4 @@
 import cv2
-import numpy as np
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap, QImage
@@ -8,7 +7,7 @@ from PySide6.QtWidgets import (
     QDialog
 )
 
-from gui.config import PANEL_WIDTH, PANEL_SPACING, track_id_color_palette
+from gui.config import track_id_color_palette
 
 class VideoCanvas(QLabel):
     """Video Display Canvas"""
@@ -101,18 +100,6 @@ class VideoCanvas(QLabel):
             return True
         return False
 
-    def next_frame(self):
-        """Go to next frame"""
-        if self.current_frame < self.total_frames - 1:
-            return self.set_frame(self.current_frame + 1)
-        return False
-
-    def prev_frame(self):
-        """Go to previous frame"""
-        if self.current_frame > 0:
-            return self.set_frame(self.current_frame - 1)
-        return False
-    
     def enable_bbox_mode(self, available_objects):
         """Enable bbox annotation mode"""
         self.bbox_mode = True
@@ -202,18 +189,6 @@ class VideoCanvas(QLabel):
                 return True
         return False
 
-    def clear_current_frame_bboxes(self):
-        """Clear all bboxes from current frame"""
-        if self.current_frame in self.frame_bboxes:
-            count = len(self.frame_bboxes[self.current_frame])
-            self.frame_bboxes[self.current_frame] = []
-            print(f"Cleared {count} bboxes from frame {self.current_frame}")
-            self.update()  # Trigger repaint
-
-            self.notify_progress_update()
-            return count
-        return 0
-    
     def notify_progress_update(self):
         """Update BBox Annotation Progress to Main Window"""
         # Find MainWindow through Parent Chain
@@ -223,7 +198,6 @@ class VideoCanvas(QLabel):
                 parent_widget.update_progress_display()
                 break
             parent_widget = parent_widget.parent()
-
 
     def canvas_to_image_coords(self, canvas_point):
         """Convert canvas coordinates to image coordinates"""
@@ -367,11 +341,3 @@ class VideoCanvas(QLabel):
         
         rect = QRect(x, y, width, height)
         painter.drawRect(rect)
-
-    def get_frame_annotations(self, frame_num):
-        """Get all annotations for a specific frame"""
-        return self.frame_bboxes.get(frame_num, [])
-
-    def get_all_annotations(self):
-        """Get all annotations across all frames"""
-        return self.frame_bboxes.copy()

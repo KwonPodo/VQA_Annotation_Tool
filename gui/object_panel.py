@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
     QGridLayout,
 )
 
-from gui.config import HALF_PANEL_WIDTH, PANEL_SPACING
+from gui.config import HALF_PANEL_WIDTH
 
 
 class ObjectPanel(QGroupBox):

@@ -103,10 +103,6 @@ class AnnotationPanel(QGroupBox):
             "interval": self.interval_input.value(),
         }
 
-    def update_segment_info(self, sampled_frames):
-        """Update segment info display"""
-        pass
-
     def set_navigation_mode(self, mode):
         """Update navigation mode display"""
         if mode == "frame":
