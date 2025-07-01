@@ -41,7 +41,6 @@ class MainWindow(QMainWindow):
         self.setGeometry(100, 100, 1400, 700)
 
         # Annotation State
-        self.current_annotation = None
         self.sampled_frames = []
         self.current_segment_index = 0
 
@@ -55,35 +54,14 @@ class MainWindow(QMainWindow):
         # Current Video and Annotation Data
         self.current_video_name = None
         self.current_annotation_data = None
-        self.saved_annotations = {}
 
         # Current Working JSON File
         self.current_json_file = None
-
 
         # Setup
         self.setup_ui()
         self.setup_connections()
         self.setup_keyboard_shortcuts()
-
-        def print_sizes():
-            print(f"ObjectPanel height: {self.object_panel.sizeHint().height()}")
-            print(f"ObjectPanel width: {self.object_panel.sizeHint().width()}")
-            print(
-                f"AnnotationPanel height: {self.annotation_panel.sizeHint().height()}"
-            )
-            print(
-                f"AnnotationPanel width: {self.annotation_panel.sizeHint().width()}"
-            )
-            print(f"QAPanel height: {self.qa_panel.sizeHint().height()}")
-            print(f"QAPanel width: {self.qa_panel.sizeHint().width()}")
-            print(f"VideoCanvas height: {self.video_canvas.sizeHint().height()}")
-            print(f"VideoCanvas width: {self.video_canvas.sizeHint().width()}")
-
-        # 윈도우가 보인 후에 크기 확인
-        from PySide6.QtCore import QTimer
-
-        QTimer.singleShot(100, print_sizes)
 
     def setup_ui(self):
         """Setup UI layout"""
@@ -119,18 +97,18 @@ class MainWindow(QMainWindow):
         file_layout = QHBoxLayout(file_group)
 
         self.load_video_btn = QPushButton("Load Video")
-        self.save_annotation_btn = QPushButton("Save Annotation")
+        self.load_annotation_btn = QPushButton("Load JSON")
+        self.save_annotation_btn = QPushButton("Save")
         self.save_as_btn = QPushButton("Save As...")
-        self.load_annotation_btn = QPushButton("Load Annotation")
 
-        for btn in [self.load_video_btn, self.save_annotation_btn, self.save_as_btn, self.load_annotation_btn]:
+        for btn in [self.load_video_btn, self.load_annotation_btn, self.save_annotation_btn, self.save_as_btn]:
             btn.setMinimumWidth(120)
             btn.setMinimumHeight(32)
 
         file_layout.addWidget(self.load_video_btn)
+        file_layout.addWidget(self.load_annotation_btn)
         file_layout.addWidget(self.save_annotation_btn)
         file_layout.addWidget(self.save_as_btn)
-        file_layout.addWidget(self.load_annotation_btn)
         file_layout.addStretch()
 
         # Video canvas
@@ -239,25 +217,17 @@ class MainWindow(QMainWindow):
         button_layout = QHBoxLayout()
 
         # 1. Undo Last BBox
-        self.undo_bbox_btn = QPushButton("↩️ Undo Last BBox")
+        self.undo_bbox_btn = QPushButton("↩️ Remove Last BBox")
         self.undo_bbox_btn.setMinimumHeight(35)
-        # self.undo_bbox_btn.setStyleSheet(
-        #     "background-color: #FF9800; color: white; "
-        #     "font-weight: bold; border-radius: 5px;"
-        # )
         self.undo_bbox_btn.setEnabled(False)
 
-        # 2. Save Annotation
-        self.save_annotation_btn = QPushButton('💾 Save Annotation')
-        self.save_annotation_btn.setMinimumHeight(35)
-        # self.save_annotation_btn.setStyleSheet(
-        #     "background-color: #4CAF50; color: white; "
-        #     "font-weight: bold; border-radius: 5px;"
-        # )
-        self.save_annotation_btn.setEnabled(False)
-        
+        # 2. New Grounding (Restart)
+        self.new_grounding_btn = QPushButton('🆕 New Grounding')
+        self.new_grounding_btn.setMinimumHeight(35)
+        self.new_grounding_btn.setEnabled(False)
+
         button_layout.addWidget(self.undo_bbox_btn)
-        button_layout.addWidget(self.save_annotation_btn)
+        button_layout.addWidget(self.new_grounding_btn)
         
         # Layout Config
         status_layout.addWidget(self.annotation_status_label)
@@ -298,14 +268,13 @@ class MainWindow(QMainWindow):
             else:
                 self.a_shortcut.setEnabled(True)
 
-
     def setup_connections(self):
         """Setup signal connections"""
         # File operations
         self.load_video_btn.clicked.connect(self.load_video)
+        self.load_annotation_btn.clicked.connect(self.load_annotation)
         self.save_annotation_btn.clicked.connect(self.save_annotation)
         self.save_as_btn.clicked.connect(self.save_as_new_file)
-        self.load_annotation_btn.clicked.connect(self.load_annotation)
 
         # Video controls
         self.prev_frame_btn.clicked.connect(self.navigate_prev)
@@ -317,7 +286,9 @@ class MainWindow(QMainWindow):
         self.annotation_panel.apply_segment_btn.clicked.connect(self.apply_time_segment_and_start)
         self.annotation_panel.undo_segment_btn.clicked.connect(self.undo_time_segment)
 
+        # Grounding Tab Buttons
         self.undo_bbox_btn.clicked.connect(self.undo_last_bbox)
+        self.new_grounding_btn.clicked.connect(self.start_new_grounding)
 
         # Object Panel selection change detector
         self.object_panel.connect_selection_changed(self.on_object_selection_changed)
@@ -368,6 +339,10 @@ class MainWindow(QMainWindow):
 
         self.load_shortcut = QShortcut(QKeySequence("Ctrl+O"), self)
         self.load_shortcut.activated.connect(self.load_video)
+
+        self.new_grounding_shortcut = QShortcut(QKeySequence("Ctrl+R"), self)
+        self.new_grounding_shortcut.activated.connect(self.start_new_grounding)
+        self.new_grounding_shortcut.setContext(Qt.ApplicationShortcut)
 
     # Event handlers
     def load_video(self):
@@ -425,7 +400,6 @@ class MainWindow(QMainWindow):
 
     def reset_annotation_state(self):
         """Reset annotation state"""
-        self.current_annotation = None
         self.sampled_frames = []
         self.current_segment_index = 0
         self.prev_segment_btn.setEnabled(False)
@@ -436,6 +410,7 @@ class MainWindow(QMainWindow):
         self.selected_objects_for_bbox = []
 
         # Reset Button State
+        self.new_grounding_btn.setEnabled(True)
         self.save_annotation_btn.setEnabled(False)
         self.save_as_btn.setEnabled(False)
         self.undo_bbox_btn.setEnabled(False)
@@ -457,21 +432,38 @@ class MainWindow(QMainWindow):
                 )
 
     def save_annotation(self):
-        """Save annotation to JSON - Concat to current loaded JSON file"""
+        """Save annotation - 첫 저장시 Save As 처럼 동작"""
         if not self.get_current_annotation_with_qa():
             QMessageBox.warning(self, "No Annotation", "No annotation to save")
             return
         
-        # If Current working JSON File is set, save at that file
-        if self.current_json_file:
-            if self.save_to_file(self.current_json_file):
-                QMessageBox.information(self, "Save Success", f"Annotation saved to {os.path.basename(self.current_json_file)}")
-            else:
-                QMessageBox.critical(self, "Save Failed", "Failed to save annotation")
+        # JSON 파일이 로드되지 않은 경우 Save As처럼 동작
+        if not self.current_json_file:
+            default_filename = f"{self.current_video_name}.json"
+            
+            file_path, _ = QFileDialog.getSaveFileName(
+                self, "Save Annotation", default_filename,
+                "JSON files (*.json);;All files (*.*)"
+            )
+            
+            if not file_path:
+                return  # 사용자가 취소한 경우
+            
+            self.current_json_file = file_path
+        
+        # 파일 저장 실행
+        if self.save_to_file(self.current_json_file):
+            # 저장 성공 시 통계 표시
+            bbox_count = sum(len(bboxes) for bboxes in self.video_canvas.frame_bboxes.values())
+            qa_count = len(self.qa_panel.get_all_qa_data()) if hasattr(self, 'qa_panel') else 0
+            
+            QMessageBox.information(self, "Save Success", 
+                                f"Annotation saved to {os.path.basename(self.current_json_file)}\n"
+                                f"• {bbox_count} bounding boxes\n"
+                                f"• {qa_count} QA sessions")
         else:
-            # Load 하지 않고 처음 작업하는 경우 새 파일로 저장
-            self.save_as_new_file()
-    
+            QMessageBox.critical(self, "Save Failed", "Failed to save annotation")
+
     def save_as_new_file(self):
         """Save as new file"""
         default_filename = f"{self.current_video_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
@@ -494,22 +486,26 @@ class MainWindow(QMainWindow):
                 with open(file_path, 'r', encoding='utf-8') as f:
                     data = json.load(f)
             else:
-                data = {"videos": {}}
-            
-            video_name = self.current_video_name
-            current_annotation = self.get_current_annotation_with_qa()
-            
-            # Initialize video entry (if not exists)
-            if video_name not in data["videos"]:
-                data["videos"][video_name] = {
-                    "video_info": current_annotation["video_info"],
+                data = {
+                    "video_info": {
+                        "filename": self.current_video_name,
+                        "total_frames": self.video_canvas.total_frames,
+                        "fps": self.video_canvas.fps,
+                        "resolution": {
+                            "width": self.video_canvas.video_resolution[0],
+                            "height": self.video_canvas.video_resolution[1]
+                        }
+                    },
                     "groundings": []
                 }
+        
+            current_annotation = self.get_current_annotation_with_qa()
             
-            existing_ids = [g.get('grounding_id') for g in data['videos'][video_name]['groundings']]
+            # 새 grounding ID 생성
+            existing_ids = [g.get('grounding_id', 0) for g in data['groundings']]
             next_id = max(existing_ids) + 1 if existing_ids else 1
-
-            # Add new grounding
+            
+            # 새 grounding 추가
             new_grounding = {
                 "grounding_id": next_id,
                 "created_at": datetime.now().isoformat(),
@@ -519,121 +515,161 @@ class MainWindow(QMainWindow):
                 "qa_sessions": current_annotation.get("qa_data", [])
             }
             
-            data["videos"][video_name]["groundings"].append(new_grounding)
-            
-            # Save to file
+            data["groundings"].append(new_grounding)
+                
+            # 파일 저장
             with open(file_path, 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
             
-            grounding_count = len(data["videos"][video_name]["groundings"])
-            print(f"Saved grounding #{grounding_count} for {video_name}")
+            grounding_count = len(data["groundings"])
+            print(f"Saved grounding #{next_id} to {file_path} (Total: {grounding_count})")
             return True
+            
             
         except Exception as e:
             print(f"Error saving: {e}")
             return False
 
+    def start_new_grounding(self):
+        """Start new grounding (확인 후 리셋)"""
+        # 현재 작업이 있는지 확인
+        if not self._has_current_work():
+            # 작업이 없으면 단순히 리셋만
+            self.reset_for_new_grounding()
+            return
+        
+        # 작업이 날아간다고 경고
+        total_bboxes = sum(len(bboxes) for bboxes in self.video_canvas.frame_bboxes.values()) if self.video_canvas.frame_bboxes else 0
+        total_qas = len(self.qa_panel.get_all_qa_data()) if hasattr(self, 'qa_panel') else 0
+        
+        if total_bboxes > 0 or total_qas > 0:
+            message = f"Current work will be lost:\n"
+            if total_bboxes > 0:
+                message += f"• {total_bboxes} bounding boxes\n"
+            if total_qas > 0:
+                message += f"• {total_qas} QA sessions\n"
+            message += f"\nContinue anyway?"
+            
+            result = QMessageBox.question(
+                self, "Start New Grounding", message,
+                QMessageBox.Yes | QMessageBox.No
+            )
+            
+            if result == QMessageBox.No:
+                return
+        
+        # Reset
+        self.reset_for_new_grounding()
+        print("🆕 Started new grounding session")
+
+    def _has_current_work(self):
+        """현재 작업이 있는지 확인"""
+        has_annotation_data = self.current_annotation_data is not None
+        has_bboxes = bool(self.video_canvas.frame_bboxes)
+        has_qa_data = False
+        
+        if hasattr(self, 'qa_panel'):
+            qa_sessions = self.qa_panel.get_all_qa_data()
+            has_qa_data = bool(qa_sessions)
+        
+        return has_annotation_data or has_bboxes or has_qa_data
+
+    def reset_for_new_grounding(self):
+        """Reset UI state for new grounding while keeping video loaded"""
+        # Stop any active bbox annotation
+        if self.bbox_annotation_active:
+            self.bbox_annotation_active = False
+            self.video_canvas.disable_bbox_mode()
+        
+        # Reset annotation data
+        self.current_annotation_data = None
+        self.sampled_frames = []
+        self.current_segment_index = 0
+        
+        # Reset video canvas annotation data
+        self.video_canvas.frame_bboxes = {}
+        self.video_canvas.existing_track_ids = {}
+        self.video_canvas.track_registry = {}
+        self.video_canvas.color_index = 0
+        self.video_canvas.update()  # Refresh display
+        
+        # Reset navigation
+        self.navigation_mode = "frame"
+        self.prev_segment_btn.setEnabled(False)
+        self.next_segment_btn.setEnabled(False)
+        
+        # Reset UI panels
+        self.object_panel.clear_selection()
+        self.object_panel.setEnabled(True)
+        
+        # Reset annotation panel
+        self.annotation_panel.undo_segment_btn.setEnabled(False)
+        self.annotation_panel.update_segment_info([])
+        self.annotation_panel.set_navigation_mode('frame')
+        
+        # Reset QA panel
+        if hasattr(self, 'qa_panel'):
+            self.qa_panel.reset_qa_panel()
+        
+        # Reset button states
+        self.new_grounding_btn.setEnabled(True)  # Keep enabled for multiple restarts
+        self.undo_bbox_btn.setEnabled(False)
+        self.save_annotation_btn.setEnabled(False)
+        self.save_as_btn.setEnabled(False)
+        
+        # Update status
+        self.update_annotation_status("Ready for new grounding - Select objects and apply time segment")
+        self.progress_label.setText("Progress: Ready for new grounding")
+        self.progress_label.setStyleSheet(
+            "color: #333; font-weight: bold; padding: 10px; "
+            "border: 2px solid #9E9E9E; border-radius: 5px; "
+            "background-color: #f5f5f5; font-size: 12px;"
+        )
+        
+        # Switch to grounding tab
+        if hasattr(self, 'tab_widget'):
+            self.tab_widget.setCurrentIndex(0)
+        
+        print("🔄 Reset completed - ready for new grounding")
+
     def load_annotation(self):
-        """Load annotation - 비디오별 최신 grounding 로드"""
+        """기존 영상 annotation 파일을 선택해서 이어서 작업"""
+        if not self.current_video_name:
+            QMessageBox.warning(self, "No Video", "Please load a video first")
+            return
+        
+        # 기본 파일명 제안
+        default_file = f"{self.current_video_name}.json"
+        
         file_path, _ = QFileDialog.getOpenFileName(
-            self, "Load Annotation", "",
+            self, "Load Annotation File", default_file,
             "JSON files (*.json);;All files (*.*)"
         )
-
+        
         if file_path:
             try:
                 with open(file_path, 'r', encoding='utf-8') as f:
                     data = json.load(f)
                 
-                # 현재 파일로 설정
+                # 현재 작업할 파일로 설정
                 self.current_json_file = file_path
+                groundings = data.get("groundings", [])
                 
-                # 현재 비디오 찾기
-                if self.current_video_name not in data["videos"]:
-                    QMessageBox.warning(self, "Video Not Found", 
-                                        f"No annotations found for video '{self.current_video_name}'")
-                    return
+                if groundings:
+                    # 기존 grounding 정보 표시
+                    QMessageBox.information(self, "Load Successful", 
+                                        f"Loaded annotation file with {len(groundings)} existing groundings.\n"
+                                        f"Latest: Grounding #{groundings[-1]['grounding_id']}\n"
+                                        f"New groundings will be added to this file.")
+                else:
+                    QMessageBox.information(self, "Load Successful", 
+                                        "Loaded empty annotation file.\n"
+                                        "Start your first grounding!")
                 
-                video_data = data["videos"][self.current_video_name]
-                groundings = video_data["groundings"]
-                
-                if not groundings:
-                    QMessageBox.warning(self, "No Groundings", 
-                                        f"No groundings found for video '{self.current_video_name}'")
-                    return
-                
-                # 가장 최근 grounding 로드 (마지막 것)
-                latest_grounding = groundings[-1]
-                self.load_grounding_data(latest_grounding)
-                
-                QMessageBox.information(self, "Load Successful", 
-                                        f"Loaded grounding #{latest_grounding['grounding_id']} from {os.path.basename(file_path)}\n"
-                                        f"Total groundings for this video: {len(groundings)}")
+                print(f"Set working file: {file_path} (has {len(groundings)} groundings)")
                 
             except Exception as e:
-                QMessageBox.critical(self, "Load Failed", f"Failed to load: {e}")
-
-    def load_grounding_data(self, grounding_data):
-        """grounding 데이터를 UI에 로드"""
-        try:
-            # Time segment 설정
-            time_segment = grounding_data["time_segment"]
-            self.annotation_panel.start_frame_input.setValue(time_segment["start_frame"])
-            self.annotation_panel.end_frame_input.setValue(time_segment["end_frame"])
-            self.annotation_panel.interval_input.setValue(time_segment["interval"])
-            
-            # Time segment 적용
-            self.apply_time_segment()
-            
-            # Objects 선택
-            self.object_panel.clear_selection()
-            for obj in grounding_data["selected_objects"]:
-                if obj in self.object_panel.checkboxes:
-                    self.object_panel.checkboxes[obj].setChecked(True)
-            
-            # Annotation 시작
-            self.start_annotation()
-            
-            # BBox 데이터 로드
-            self.video_canvas.frame_bboxes = grounding_data["annotations"]
-            self.rebuild_track_registries()
-            
-            # QA 데이터 로드
-            if hasattr(self, 'qa_panel'):
-                self.qa_panel.set_qa_data(grounding_data.get("qa_sessions", []))
-                self.update_qa_panel_track_ids()
-            
-            self.update_annotation_status(f"Loaded grounding #{grounding_data['grounding_id']} - ready to continue")
-            
-        except Exception as e:
-            QMessageBox.critical(self, "Load Error", f"Error loading grounding: {e}")
-
-    def rebuild_track_registries(self):
-        """Track registry 재구축"""
-        self.video_canvas.existing_track_ids = {}
-        self.video_canvas.track_registry = {}
-        color_index = 0
-        
-        for frame_bboxes in self.video_canvas.frame_bboxes.values():
-            for bbox in frame_bboxes:
-                track_id = bbox['track_id']
-                object_type = bbox['object_type']
-                
-                # existing_track_ids 업데이트
-                if object_type not in self.video_canvas.existing_track_ids:
-                    self.video_canvas.existing_track_ids[object_type] = []
-                if track_id not in self.video_canvas.existing_track_ids[object_type]:
-                    self.video_canvas.existing_track_ids[object_type].append(track_id)
-                
-                # 색상 할당
-                if track_id not in self.video_canvas.track_registry:
-                    color = self.video_canvas.color_palette[color_index % len(self.video_canvas.color_palette)]
-                    self.video_canvas.track_registry[track_id] = color
-                    color_index += 1
-        
-        self.video_canvas.color_index = color_index
-        self.video_canvas.update()
-        print(f"Rebuilt registries: {len(self.video_canvas.track_registry)} tracks")
+                QMessageBox.critical(self, "Load Failed", f"Failed to load file: {e}")
 
     def navigate_prev(self):
         # Segment mode
@@ -685,62 +721,6 @@ class MainWindow(QMainWindow):
             print(
                 f"Navigated to segment {self.current_segment_index} of {len(self.sampled_frames) - 1} (frame {frame_num})"
             )
-
-    def apply_time_segment(self):
-        """Apply time segment and create uniform sampling"""
-        segment_info = self.annotation_panel.get_segment_info()
-        start_frame = segment_info["start_frame"]
-        end_frame = segment_info["end_frame"]
-        interval = segment_info["interval"]
-
-        # Validate input
-        if start_frame >= end_frame:
-            QMessageBox.warning(
-                self, "Invalid Segment", "Start frame must be less than end frame!"
-            )
-            return
-
-        if end_frame >= self.video_canvas.total_frames:
-            QMessageBox.warning(
-                self,
-                "Invalid Segment",
-                f"End frame must be less than {self.video_canvas.total_frames}!",
-            )
-            return
-
-        # Create uniform sampling
-        sampled_frames = list(range(start_frame, end_frame + 1, interval))
-
-        if not sampled_frames:
-            QMessageBox.warning(
-                self, "Invalid Segment", "No frames sampled with current settings!"
-            )
-            return
-
-        # Enable segment navigation
-        self.enable_segment_navigation(sampled_frames)
-
-        # Update annotation panel
-        self.annotation_panel.update_segment_info(sampled_frames)
-
-        # Switch to segment mode
-        self.navigation_mode = 'segment'
-
-        # Enable undo button
-        self.annotation_panel.undo_segment_btn.setEnabled(True)
-
-        # Change keyboard focus to main window
-        self.setFocus()
-
-        # Update Butto State
-        self.on_object_selection_changed()
-
-        # Update QA Panel with time segment info
-        if hasattr(self, 'qa_panel'):
-            self.qa_panel.set_available_time_segments(sampled_frames)
-
-        print(f"Applied time segment: {start_frame}-{end_frame}, interval: {interval}")
-        print(f"Sampled frames: {sampled_frames}")
 
     def apply_time_segment_and_start(self):
         """Apply time segment and automatically start BBox Annotation"""
@@ -840,6 +820,7 @@ class MainWindow(QMainWindow):
         
         # Update Button States
         self.undo_bbox_btn.setEnabled(True)
+        self.new_grounding_btn.setEnabled(True)
         self.object_panel.setEnabled(False)
 
         # Update Progress
@@ -869,72 +850,6 @@ class MainWindow(QMainWindow):
         self.on_object_selection_changed()
 
         print("Undo time segment sampling - return to frame navigation mode")
-
-    def start_annotation(self):
-        """Start Annotation (If current annotation is ongoing, ask for confirmation)"""
-        # Check if there is ongoing annotation
-        if self.current_annotation_data is not None or self.video_canvas.frame_bboxes:
-            total_bboxes = sum(len(bboxes) for bboxes in self.video_canvas.frame_bboxes.values())
-            if total_bboxes > 0:
-                result = QMessageBox.question(self, "Start New Annotation", 
-                                            f"Current annotation has {total_bboxes} bounding boxes.\n"
-                                            f"Start new annotation? (Current work will be lost)",
-                                            QMessageBox.Yes | QMessageBox.No)
-                if result == QMessageBox.No:
-                    return
-        
-        # Check required conditions
-        if not self.current_video_name:
-            QMessageBox.warning(self, "No Video", "Please load a video first.")
-            return
-            
-        selected_objects = self.object_panel.get_selected_objects()
-        if not selected_objects:
-            QMessageBox.warning(self, "No Objects", "Please select objects first.")
-            return
-            
-        if not self.sampled_frames:
-            QMessageBox.warning(self, "No Time Segment", "Please apply time segment first.")
-            return
-
-        # Start new annotation
-        self.current_annotation_data = {
-            "video_info": {
-                "filename": self.current_video_name,
-                "total_frames": self.video_canvas.total_frames,
-                "fps": self.video_canvas.fps,
-                "resolution": {
-                    "width": self.video_canvas.video_resolution[0],
-                    "height": self.video_canvas.video_resolution[1]
-                }
-            },
-            "time_segment": {
-                "start_frame": self.sampled_frames[0] if self.sampled_frames else 0,
-                "end_frame": self.sampled_frames[-1] if self.sampled_frames else 0,
-                "interval": self.annotation_panel.get_segment_info()["interval"],
-                "sampled_frames": self.sampled_frames.copy()
-            },
-            "selected_objects": selected_objects.copy(),
-            "annotations": {},
-            "qa_data": None
-        }
-
-        # Initialize BBox data
-        self.video_canvas.frame_bboxes = {}
-        self.video_canvas.existing_track_ids = {}
-        self.video_canvas.track_registry = {}
-        self.video_canvas.color_index = 0
-
-        if hasattr(self, 'qa_panel'):
-            self.qa_panel.reset_qa_panel()
-            self.qa_panel.set_available_time_segments(self.sampled_frames)
-
-        # Update UI state
-        self.start_bbox_btn.setEnabled(True)
-        self.update_annotation_status(f"Annotation started: {', '.join(selected_objects)}")
-        
-        print(f"Started annotation for {self.current_video_name}")
-        print(f"Objects: {selected_objects}")
 
     def update_annotation_status(self, message):
         """Update annotation status label"""
@@ -1022,8 +937,6 @@ class MainWindow(QMainWindow):
         has_objects = len(selected_objects) > 0
         has_segments = len(self.sampled_frames) > 0
         
-        self.start_annotation_btn.setEnabled(has_video and has_objects and has_segments)
-        
         # Status message
         if not has_video:
             self.update_annotation_status("Load video first")
@@ -1044,88 +957,6 @@ class MainWindow(QMainWindow):
         else:
             self.update_annotation_status(f"Ready to start: {', '.join(selected_objects)}")
 
-    def start_bbox_annotation(self):
-        """Start Bbox Annotation"""
-        selected_objects = self.object_panel.get_selected_objects()
-        
-        if not selected_objects:
-            QMessageBox.warning(self, "No Objects Selected", 
-                                "Please select at least one object type before starting annotation.")
-            return
-        
-        if not self.sampled_frames:
-            QMessageBox.warning(self, "No Time Segment", 
-                                "Please apply time segment first before starting annotation.")
-            return
-        
-        # Activate Bbox Annotation Mode
-        self.bbox_annotation_active = True
-        self.selected_objects_for_bbox = selected_objects.copy()
-        
-        # Activate Bbox Annotation Mode on Video Canvas
-        self.video_canvas.enable_bbox_mode(self.selected_objects_for_bbox)
-        
-        # Move to first segment frame
-        if self.sampled_frames:
-            self.current_segment_index = 0
-            self.video_canvas.set_frame(self.sampled_frames[0])
-            self.update_frame_info()
-            
-            # Change to segment mode
-            self.navigation_mode = 'segment'
-        
-        # Update button states
-        self.start_bbox_btn.setEnabled(False)
-        self.stop_bbox_btn.setEnabled(True)
-        self.undo_bbox_btn.setEnabled(True)
-        self.clear_frame_btn.setEnabled(True)
-        
-        # Disable Object Selection (cannot change during annotation)
-        self.object_panel.setEnabled(False)
-        
-        print(f"Started bbox annotation for objects: {self.selected_objects_for_bbox}")
-        print(f"Annotation will be done on {len(self.sampled_frames)} frames")
-
-    def stop_bbox_annotation(self):
-        """End Bbox Annotation"""
-        if not self.bbox_annotation_active:
-            return
-        
-        # Save bbox data to current annotation
-        if self.current_annotation_data:
-            self.current_annotation_data["annotations"] = self.video_canvas.get_all_annotations()
-        
-        # Deactivate Bbox Annotation Mode
-        self.bbox_annotation_active = False
-        self.video_canvas.disable_bbox_mode()
-
-        # Update UI State
-        self.start_bbox_btn.setEnabled(True)
-        self.stop_bbox_btn.setEnabled(False)
-        self.undo_bbox_btn.setEnabled(False)
-        self.clear_frame_btn.setEnabled(False)
-
-        # Activate Object Selection
-        self.object_panel.setEnabled(True)
-
-        # Update Status
-        annotated_frames = len(self.video_canvas.frame_bboxes)
-        total_frames = len(self.sampled_frames)
-        self.update_annotation_status(f"BBox Completed: {annotated_frames}/{total_frames} frames - Ready for QA")
-
-        # Update QA Panel
-        self.update_qa_panel_track_ids()
-        
-        # Switch to QA tab (optional)
-        if hasattr(self, 'tab_widget'):
-            result = QMessageBox.question(self, "Switch to QA", 
-                                        "BBox annotation completed. Switch to QA tab?",
-                                        QMessageBox.Yes | QMessageBox.No)
-            if result == QMessageBox.Yes:
-                self.tab_widget.setCurrentIndex(1)  # QA tab
-
-        print(f"BBox Annotation Completed: {annotated_frames}/{total_frames} frames")
-
     def undo_last_bbox(self):
         """Remove last bbox on current frame"""
         if not self.bbox_annotation_active:
@@ -1135,26 +966,6 @@ class MainWindow(QMainWindow):
             print(f"Undid last bbox on frame {self.video_canvas.current_frame}")
         else:
             QMessageBox.information(self, "No BBox", "No bounding boxes to undo on current frame.")
-
-    def clear_current_frame(self):
-        """Remove all bboxes on current frame"""
-        if not self.bbox_annotation_active:
-            return
-        
-        current_frame = self.video_canvas.current_frame
-        bbox_count = len(self.video_canvas.frame_bboxes.get(current_frame, []))
-        
-        if bbox_count == 0:
-            QMessageBox.information(self, "No BBoxes", "No bounding boxes to clear on current frame.")
-            return
-        
-        result = QMessageBox.question(self, "Clear Frame", 
-                                    f"Are you sure you want to clear all {bbox_count} bounding boxes from current frame?",
-                                    QMessageBox.Yes | QMessageBox.No)
-        
-        if result == QMessageBox.Yes:
-            cleared_count = self.video_canvas.clear_current_frame_bboxes()
-            print(f"Cleared {cleared_count} bboxes from frame {current_frame}")
 
     def update_qa_panel_track_ids(self):
         """Update QA panel with available track IDs"""
