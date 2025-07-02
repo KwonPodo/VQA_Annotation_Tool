@@ -1,5 +1,13 @@
 # Grounded Video Question Answering Annotation Tool
 
+## Snapshots
+![Application Overview](imgs/App_Overview.png)
+### Main Interface (Grounding Tab)
+![Main Interface](imgs/VQA_Annotator_GroundingTab.png)
+
+### QA Annotation Interface (QA Tab)
+![QA Interface](imgs/VQA_Annotator_QATab.png)
+
 ## Requirements
 
 - Python 3.9
