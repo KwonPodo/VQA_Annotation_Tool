@@ -353,17 +353,87 @@ class MainWindow(QMainWindow):
                 print(f"Successfully loaded video: {file_path}")
                 print(f'Video loaded: {self.current_video_name}')
 
+                ## Reset All Annotation State
+                self.reset_all_for_new_video()
+
                 self.update_frame_info()
 
                 # Update annotation panel with video info
                 self.annotation_panel.set_video_info(self.video_canvas.total_frames)
 
-                # Reset annotation state
-                self.reset_annotation_state()
-
                 self.update_annotation_status(f"Video loaded: {self.current_video_name}")
             else:
                 print(f"Failed to load video: {file_path}")
+    
+    def reset_all_for_new_video(self):
+        """When Load Video, Rest all status"""
+        # 1. Reset JSON File Path
+        self.current_json_file = None
+
+        # 2. Reset Annotation Data
+        self.current_annotation_data = None
+        self.sampled_frames = []
+        self.current_segment_index = 0
+
+        # 3. Reset Video Canvas
+        self.video_canvas.disable_bbox_mode()
+        self.video_canvas.frame_bboxes = {}
+        self.video_canvas.existing_track_ids = {}
+        self.video_canvas.track_registry = {}
+        self.video_canvas.color_index = 0
+        self.video_canvas.edit_mode = False
+        self.video_canvas.selected_bbox = None
+        self.video_canvas.selected_bbox_index = None
+        self.video_canvas.is_drawing = False
+        self.video_canvas.update()
+
+        # 4. Reset Object Panel
+        self.object_panel.clear_selection()
+        self.object_panel.setEnabled(True)
+
+        # 5. Reset Annotation Panel
+        self.annotation_panel.apply_segment_btn.setEnabled(False)
+        self.annotation_panel.undo_segment_btn.setEnabled(False)
+        self.annotation_panel.set_navigation_mode('frame')
+        self.annotation_panel.start_frame_input.setValue(0)
+        self.annotation_panel.end_frame_input.setValue(0)
+        self.annotation_panel.interval_input.setValue(10)
+
+        # 6. Reset QA Panel
+        if hasattr(self, 'qa_panel'):
+            self.qa_panel.reset_qa_panel()
+            self.qa_panel.set_available_track_ids([])
+            if hasattr(self.qa_panel, 'sampled_frames'):
+                delattr(self.qa_panel, 'sampled_frames')
+        
+        # 7. Reset Navigation Button Status
+        self.prev_segment_btn.setEnabled(False)
+        self.next_segment_btn.setEnabled(False)
+
+        # 8. Reset Action Button Status
+        self.new_grounding_btn.setEnabled(True)
+        self.undo_bbox_btn.setEnabled(False)
+        self.save_annotation_btn.setEnabled(False)
+        self.save_as_btn.setEnabled(False)
+
+        # 9. Reset Progress
+        self.progress_label.setText('Progress: Not Started')
+        self.progress_label.setStyleSheet(
+            "color: #333; font-weight: bold; padding: 10px; "
+            "border: 2px solid #9E9E9E; border-radius: 5px; "
+            "background-color: #f5f5f5; font-size: 12px;"
+        )
+
+        # 10. Reset Tab to Grounding Tab
+        if hasattr(self, 'tab_widget'):
+            self.tab_widget.setCurrentIndex(0)
+        
+        # 11. Keyboard Shortcuts Reset
+        if hasattr(self, 'a_shortcut'):
+            self.a_shortcut.setEnabled(True)
+        
+        print("Load Video: Overall Status Reset Complete.")
+
 
     def update_frame_info(self):
         """Update frame information display 0-Indexing"""
@@ -390,22 +460,6 @@ class MainWindow(QMainWindow):
             frame_info += segment_info
 
         self.frame_info_label.setText(frame_info)
-
-    def reset_annotation_state(self):
-        """Reset annotation state"""
-        self.sampled_frames = []
-        self.current_segment_index = 0
-        self.prev_segment_btn.setEnabled(False)
-        self.next_segment_btn.setEnabled(False)
-
-        self.current_annotation_data = None
-        self.video_canvas.disable_bbox_mode()
-
-        # Reset Button State
-        self.new_grounding_btn.setEnabled(True)
-        self.save_annotation_btn.setEnabled(False)
-        self.save_as_btn.setEnabled(False)
-        self.undo_bbox_btn.setEnabled(False)
 
     def save_annotation(self):
         """Save annotation - 첫 저장시 Save As 처럼 동작"""
