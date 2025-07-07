@@ -22,14 +22,15 @@ class QAPanel(QGroupBox):
         # QA Data Management
         self.qa_sessions = []  # Save Several QAs
         self.current_qa_index = 0
-        
-        # Load Question Categories
-        self.question_categories = self.load_question_categories()
-        
+
         # Current Available Track IDs
         self.available_track_ids = []
         
+        # Setup UI
         self.setup_ui()
+
+        # Load Question Categories
+        self.question_categories = self.load_question_categories()
         
     def setup_ui(self):
         """Setup QA panel UI"""
@@ -40,13 +41,24 @@ class QAPanel(QGroupBox):
         self.session_info_label.setStyleSheet("font-weight: bold; color: #333; margin-bottom: 10px;")
         layout.addWidget(self.session_info_label)
         
-        # Question Category
-        category_layout = QHBoxLayout()
-        category_layout.addWidget(QLabel("Question Category:"))
-        
-        self.category_combo = QComboBox()
-        self.category_combo.addItems(self.question_categories)
-        category_layout.addWidget(self.category_combo)
+        # Question Category (Nested 2)
+        category_layout = QVBoxLayout()
+
+        ## Main Question Category
+        main_cat_layout = QHBoxLayout()
+        main_cat_layout.addWidget(QLabel("Main Category:"))
+        self.main_category_combo = QComboBox()
+        self.main_category_combo.currentTextChanged.connect(self.on_main_category_changed)
+        main_cat_layout.addWidget(self.main_category_combo)
+        category_layout.addLayout(main_cat_layout)
+
+        ## Sub Question Category
+        sub_cat_layout = QHBoxLayout()
+        sub_cat_layout.addWidget(QLabel("Sub Category:"))
+        self.sub_category_combo = QComboBox()
+        sub_cat_layout.addWidget(self.sub_category_combo)
+        category_layout.addLayout(sub_cat_layout)
+
         layout.addLayout(category_layout)
         
         # Question Input
@@ -155,15 +167,54 @@ class QAPanel(QGroupBox):
         """Load question categories from JSON file"""
         json_path = os.path.join("data", "question_categories.json")
         if os.path.exists(json_path):
-            with open(json_path, "r") as f:
-                return json.load(f)
+            with open(json_path, "r", encoding="utf-8") as f:
+                categories_data = json.load(f)
+                self.setup_category_combos(categories_data)
+                return categories_data
         else:
             print(f"Warning: Question categories file not found at {json_path}")
             QMessageBox.warning(
                 self, "File Not Found",
                 f"The file 'question_categories.json' was not found at {json_path}"
             )
-            return ["General"]
+            default_categories = {"question_categories.json Error": ["ERROR!!"]}
+            self.setup_category_combos(default_categories)
+            return default_categories
+    
+    def setup_category_combos(self, categories_data):
+        """Setup main & sub category combos"""
+        self.categories_data = categories_data
+
+        # Main category combo
+        self.main_category_combo.clear()
+        self.main_category_combo.addItems(list(categories_data.keys()))
+
+        if categories_data:
+            first_main = list(categories_data.keys())[0]
+            self.update_sub_categories(first_main)
+    
+    def on_main_category_changed(self, main_category):
+        """If Main Category changes, update sub category"""
+        if main_category:
+            self.update_sub_categories(main_category)
+    
+    def update_sub_categories(self, main_category):
+        """Update sub category combo box"""
+        self.sub_category_combo.clear()
+
+        if main_category in self.categories_data:
+            sub_categories = self.categories_data[main_category]
+            self.sub_category_combo.addItems(sub_categories)
+    
+    def get_current_category(self):
+        """Return currently selected categorie (Main > Sub)"""
+        main_cat = self.main_category_combo.currentText()
+        sub_cat = self.sub_category_combo.currentText()
+
+        return {
+            'main': main_cat,
+            'sub': sub_cat
+        }
     
     def set_available_track_ids(self, track_ids):
         """Update available track IDs for grounding"""
@@ -233,7 +284,7 @@ class QAPanel(QGroupBox):
         """Save current QA session"""
         question = self.question_input.toPlainText().strip()
         answer = self.answer_input.toPlainText().strip()
-        category = self.category_combo.currentText()
+        category = self.get_current_category()
         
         if not question or not answer:
             QMessageBox.warning(self, "Incomplete QA", "Please enter both question and answer.")
@@ -349,7 +400,7 @@ class QAPanel(QGroupBox):
         """Clear current QA inputs"""
         self.question_input.clear()
         self.answer_input.clear()
-        self.category_combo.setCurrentIndex(0)
+        self.main_category_combo.setCurrentIndex(0)
         
         # Clear all checkboxes
         for checkbox in self.grounded_checkboxes.values():
@@ -369,7 +420,7 @@ class QAPanel(QGroupBox):
         current_qa = self.qa_sessions[self.current_qa_index]
         return (current_qa["question"] != self.question_input.toPlainText().strip() or
                 current_qa["answer"] != self.answer_input.toPlainText().strip() or
-                current_qa["question_category"] != self.category_combo.currentText())
+                current_qa["question_category"] != self.get_current_category())
     
     def prev_qa_session(self):
         """Go to previous QA session"""
@@ -396,9 +447,17 @@ class QAPanel(QGroupBox):
             self.answer_input.setPlainText(qa["answer"])
             
             # 카테고리 설정
-            category_index = self.category_combo.findText(qa["question_category"])
-            if category_index >= 0:
-                self.category_combo.setCurrentIndex(category_index)
+            category_data = qa.get('question_category', {})
+            if isinstance(category_data, dict):
+                main_cat = category_data.get('main', '')
+                sub_cat = category_data.get('sub', '')
+
+                main_index = self.main_category_combo.findText(main_cat)
+                if main_index >= 0:
+                    self.main_category_combo.setCurrentIndex(main_index)
+                    sub_index = self.sub_category_combo.findText(sub_cat)
+                    if sub_index >= 0:
+                        self.sub_category_combo.setCurrentIndex(sub_index)
             
             # grounded objects 체크
             for track_id, checkbox in self.grounded_checkboxes.items():
