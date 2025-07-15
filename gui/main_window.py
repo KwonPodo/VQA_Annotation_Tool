@@ -166,25 +166,25 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.tab_widget)
         
         return panel
-    
+
     def create_grounding_tab(self):
-        """Create grounding tab with existing controls"""
+        """Create grounding tab with improved layout"""
         tab = QWidget()
         layout = QVBoxLayout(tab)
+        layout.setSpacing(10)
         
-        # Top row: Object panel + Annotation panel
-        top_row_layout = QHBoxLayout()
-        
-        # Object selection panel
+        # Upper: Object Panel
         self.object_panel = ObjectPanel()
+        layout.addWidget(self.object_panel, 1)
         
-        # Annotation controls panel
+        # Lower: Annotation Panel + Annoation Status Panel
+        bottom_row_layout = QHBoxLayout()
+        bottom_row_layout.setSpacing(10)
+        
+        # Upper Left: Annotation controls panel
         self.annotation_panel = AnnotationPanel()
         
-        top_row_layout.addWidget(self.object_panel)
-        top_row_layout.addWidget(self.annotation_panel)
-
-        # Annotation Status
+        # Upper Right: Annotation Status
         status_group = QGroupBox('3. BBox Annotation Status')
         status_layout = QVBoxLayout(status_group)
         
@@ -222,16 +222,19 @@ class MainWindow(QMainWindow):
         button_layout.addWidget(self.undo_bbox_btn)
         button_layout.addWidget(self.new_grounding_btn)
         
-        # Layout Config
+        # Status Layout 구성
         status_layout.addWidget(self.annotation_status_label)
         status_layout.addSpacing(8)
         status_layout.addWidget(self.progress_label)
         status_layout.addSpacing(10)
         status_layout.addLayout(button_layout)
+        status_layout.addStretch()
         
-        layout.addLayout(top_row_layout)
-        layout.addWidget(status_group)
-        layout.addStretch()
+        # 하단 가로 배치
+        bottom_row_layout.addWidget(self.annotation_panel)
+        bottom_row_layout.addWidget(status_group)
+        
+        layout.addLayout(bottom_row_layout, 0)
         
         return tab
     
@@ -299,32 +302,32 @@ class MainWindow(QMainWindow):
         # D Mapping: Prev Frame
         self.d_shortcut = QShortcut(QKeySequence(Qt.Key_D), self)
         self.d_shortcut.activated.connect(self.navigate_prev)
-        self.d_shortcut.setContext(Qt.ApplicationShortcut)
+        self.d_shortcut.setContext(Qt.WindowShortcut)
 
         # F Mapping: Next Frame
         self.f_shortcut = QShortcut(QKeySequence(Qt.Key_F), self)
         self.f_shortcut.activated.connect(self.navigate_next)
-        self.f_shortcut.setContext(Qt.ApplicationShortcut)
+        self.f_shortcut.setContext(Qt.WindowShortcut)
 
         # C Mapping: Next Frame
         self.c_shortcut = QShortcut(QKeySequence(Qt.Key_C), self)
         self.c_shortcut.activated.connect(lambda: self.prev_n_frame(10))
-        self.c_shortcut.setContext(Qt.ApplicationShortcut)
+        self.c_shortcut.setContext(Qt.WindowShortcut)
 
         # V Mapping: Next Frame
         self.v_shortcut = QShortcut(QKeySequence(Qt.Key_V), self)
         self.v_shortcut.activated.connect(lambda: self.next_n_frame(10))
-        self.v_shortcut.setContext(Qt.ApplicationShortcut)
+        self.v_shortcut.setContext(Qt.WindowShortcut)
 
         # A Mapping: Apply Time Segment
         self.a_shortcut = QShortcut(QKeySequence(Qt.Key_A), self)
         self.a_shortcut.activated.connect(self.apply_time_segment_and_start)
-        self.a_shortcut.setContext(Qt.ApplicationShortcut)
+        self.a_shortcut.setContext(Qt.WindowShortcut)
 
         # Q Mapping: Switch to QA Tab
         self.q_shortcut = QShortcut(QKeySequence(Qt.Key_Q), self)
         self.q_shortcut.activated.connect(self.switch_to_qa_tab)
-        self.q_shortcut.setContext(Qt.ApplicationShortcut)
+        self.q_shortcut.setContext(Qt.WindowShortcut)
 
         # Other shortcuts
         self.save_shortcut = QShortcut(QKeySequence("Ctrl+S"), self)
@@ -335,7 +338,7 @@ class MainWindow(QMainWindow):
 
         self.new_grounding_shortcut = QShortcut(QKeySequence("Ctrl+R"), self)
         self.new_grounding_shortcut.activated.connect(self.start_new_grounding)
-        self.new_grounding_shortcut.setContext(Qt.ApplicationShortcut)
+        self.new_grounding_shortcut.setContext(Qt.WindowShortcut)
 
     # Event handlers
     def load_video(self):
@@ -433,7 +436,6 @@ class MainWindow(QMainWindow):
             self.a_shortcut.setEnabled(True)
         
         print("Load Video: Overall Status Reset Complete.")
-
 
     def update_frame_info(self):
         """Update frame information display 0-Indexing"""
@@ -854,22 +856,89 @@ class MainWindow(QMainWindow):
         print(f"Segments: {len(sampled_frames)} frames to annotate")
 
     def undo_time_segment(self):
-        """Undo time segment"""
-
+        """Reset annotation data, keep object selection"""
+        
+        # Backup selected objects
+        selected_objects = self.object_panel.get_selected_objects()
+        
+        # Reset Annotation data
+        self.reset_annotation_data_only()
+        
+        # Update backup object selection data
+        self.restore_object_selection(selected_objects)
+        
+        print(f"🔄 Reset annotation data - kept object selection: {selected_objects}")
+    def reset_annotation_data_only(self):
+        """어노테이션 데이터만 초기화 (객체 선택은 유지)"""
+        
+        # 1. Deactivate Bbox mode
+        if self.video_canvas.bbox_mode:
+            self.video_canvas.disable_bbox_mode()
+        
+        # 2. Reset Annotation data
+        self.current_annotation_data = None
         self.sampled_frames = []
         self.current_segment_index = 0
-
+        
+        # 3. Reset VideoCanvas Annotation data
+        self.video_canvas.frame_bboxes = {}
+        self.video_canvas.existing_track_ids = {}
+        self.video_canvas.track_registry = {}
+        self.video_canvas.color_index = 0
+        self.video_canvas.edit_mode = False
+        self.video_canvas.selected_bbox = None
+        self.video_canvas.selected_bbox_index = None
+        self.video_canvas.is_drawing = False
+        self.video_canvas.update()
+        
+        # 4. Reset Annotation panel (Keep object panel)
+        self.object_panel.setEnabled(True)
+        self.annotation_panel.undo_segment_btn.setEnabled(False)
+        self.annotation_panel.set_navigation_mode('frame')
+        
+        # 5. Init QA Panel
+        if hasattr(self, 'qa_panel'):
+            self.qa_panel.reset_qa_panel()
+            self.qa_panel.set_available_track_ids([])
+        
+        # 6. Navigation Button status
         self.prev_segment_btn.setEnabled(False)
         self.next_segment_btn.setEnabled(False)
-
-        self.annotation_panel.undo_segment_btn.setEnabled(False)
-
+        
+        # 7. Action Button Status
+        self.undo_bbox_btn.setEnabled(False)
+        self.save_annotation_btn.setEnabled(False)
+        self.save_as_btn.setEnabled(False)
+        
+        # 8. Reset Progress Button
+        self.progress_label.setText('Progress: Not Started')
+        self.progress_label.setStyleSheet(
+            "color: #333; font-weight: bold; padding: 10px; "
+            "border: 2px solid #9E9E9E; border-radius: 5px; "
+            "background-color: #f5f5f5; font-size: 12px;"
+        )
+        
+        # 9. Move to Grounding Tab
+        if hasattr(self, 'tab_widget'):
+            self.tab_widget.setCurrentIndex(0)
+        
+        # 10. Focus
         self.setFocus()
 
-        # Update Button State
+    def restore_object_selection(self, selected_objects):
+        """Restore Selected Objects"""
+        self.object_panel.clear_selection()
+        
+        for category, checkbox in self.object_panel.checkboxes.items():
+            if category in selected_objects:
+                checkbox.setChecked(True)
+        
         self.on_object_selection_changed()
-
-        print("Undo time segment sampling - return to frame navigation mode")
+        
+        if selected_objects:
+            self.update_annotation_status(f"Ready to restart with: {', '.join(selected_objects)}")
+        else:
+            self.update_annotation_status("Select objects to start annotation")
 
     def update_annotation_status(self, message):
         """Update annotation status label"""
