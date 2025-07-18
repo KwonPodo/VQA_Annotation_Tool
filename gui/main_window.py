@@ -1126,7 +1126,17 @@ class MainWindow(QMainWindow):
         
         # Add QA data
         annotation_data = self.current_annotation_data.copy()
-        annotation_data['annotations'] = self.video_canvas.frame_bboxes.copy()
+
+        # Padded Coords -> Original Coords -> BFoV
+        converted_annotations = {}
+        for frame_idx, bboxes in self.video_canvas.frame_bboxes.items():
+            converted_annotations[frame_idx] = []
+            for bbox in bboxes:
+                converted_bbox = self.video_canvas.convert_bbox_for_save(bbox)
+                converted_annotations[frame_idx].append(converted_bbox)
+
+        annotation_data['annotations'] = converted_annotations
+
         if hasattr(self, 'qa_panel'):
             annotation_data["qa_data"] = self.qa_panel.get_all_qa_data()
         
