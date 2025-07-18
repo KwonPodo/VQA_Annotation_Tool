@@ -22,12 +22,13 @@ from PySide6.QtWidgets import (
     QFrame,
     QMessageBox,
     QTabWidget,
+    QCheckBox
 )
 
 from gui.annotation_panel import AnnotationPanel
 from gui.object_panel import ObjectPanel
 from gui.qa_panel import QAPanel
-from gui.config import PANEL_WIDTH
+from gui.config import PANEL_WIDTH, DEFAULT_360_MODE
 from gui.video_canvas import VideoCanvas
 
 
@@ -43,6 +44,10 @@ class MainWindow(QMainWindow):
         # Annotation State
         self.sampled_frames = []
         self.current_segment_index = 0
+        
+        # 360 Video Mode Status (Padding for Bbox)
+        self.is_360_mode = False
+        self.current_video_name = None
 
         # Current Video and Annotation Data
         self.current_video_name = None
@@ -88,6 +93,11 @@ class MainWindow(QMainWindow):
         # File operations
         file_group = QGroupBox("File Operations")
         file_layout = QHBoxLayout(file_group)
+
+        self.mode_360_checkbox = QCheckBox("360 Video Mode")
+        self.mode_360_checkbox.setChecked(DEFAULT_360_MODE)
+        self.mode_360_checkbox.stateChanged.connect(self.on_360_mode_changed)
+        file_layout.addWidget(self.mode_360_checkbox)
 
         self.load_video_btn = QPushButton("Load Video")
         self.load_annotation_btn = QPushButton("Load JSON")
@@ -356,13 +366,16 @@ class MainWindow(QMainWindow):
                 print(f"Successfully loaded video: {file_path}")
                 print(f'Video loaded: {self.current_video_name}')
 
-                ## Reset All Annotation State
+                # Reset All Annotation State
                 self.reset_all_for_new_video()
 
                 self.update_frame_info()
 
                 # Update annotation panel with video info
                 self.annotation_panel.set_video_info(self.video_canvas.total_frames)
+
+                # Detect 360 Panoramic Video
+                self.auto_detect_360_mode()
 
                 self.update_annotation_status(f"Video loaded: {self.current_video_name}")
             else:
@@ -660,6 +673,40 @@ class MainWindow(QMainWindow):
             self.tab_widget.setCurrentIndex(0)
         
         print("🔄 Reset completed - ready for new grounding")
+
+    def on_360_mode_changed(self, state):
+        """360 Mode State Change"""
+        self.is_360_mode = (state == Qt.CheckState.Checked.value)
+
+        if self.is_360_mode:
+            print("360 Video Mode: Enabled")
+        else:
+            print("360 Video Mode: Disabled")
+        
+        if self.video_canvas.current_frame_data is not None:
+            self.video_canvas.set_360_mode(self.is_360_mode)
+            self.video_canvas.update_display()
+    
+    def auto_detect_360_mode(self):
+        """Detect 360 video based on its resolution"""
+        if not self.video_canvas.video_resolution:
+            return
+
+        width, height = self.video_canvas.video_resolution
+        aspect_ratio = width / height if height > 0 else 0
+
+        # 360 video detect logic : if width : height == 2 : 1
+        is_panoramic = 1.8 <= aspect_ratio <= 2.2
+        
+        if is_panoramic != self.is_360_mode:
+            self.mode_360_checkbox.setChecked(is_panoramic)
+
+            if is_panoramic:
+                print(f"Auto-Detect 360 Video: {width}x{height} (ratio: {aspect_ratio:.2f})")
+                self.update_annotation_status(f"360 mode enabled for video ({width}x{height})")
+            else:
+                print(f"Auto-Detect Standard Video: {width}x{height} (ratio: {aspect_ratio:.2f})")
+                self.update_annotation_status(f"360 mode disabled for video ({width}x{height})")
 
     def load_annotation(self):
         """기존 영상 annotation 파일을 선택해서 이어서 작업"""

@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
     QDialog
 )
 
-from gui.config import track_id_color_palette
+from gui.config import track_id_color_palette, PADDING_RATIO
 
 class VideoCanvas(QLabel):
     """Video Display Canvas"""
@@ -64,6 +64,10 @@ class VideoCanvas(QLabel):
         self.CORNER_THRESHOLD = 15
         self.EDGE_THRESHOLD = 10
 
+        # 360 Video Mode
+        self.is_360_mode = False
+        self.padding_ratio = PADDING_RATIO
+
     def load_video(self, file_path):
         """Load video file"""
         if self.video_cap:
@@ -84,6 +88,11 @@ class VideoCanvas(QLabel):
 
             return True
         return False
+
+    def set_360_mode(self, is_360_mode):
+        """360 Video Mode"""
+        self.is_360_mode = is_360_mode
+        print(f"VideoCanvas: 360 mode set to {is_360_mode}")
 
     def set_frame(self, frame_index):
         """Set current frame index"""

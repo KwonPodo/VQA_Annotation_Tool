@@ -2,6 +2,8 @@ PANEL_WIDTH = 600
 PANEL_SPACING = 5
 HALF_PANEL_WIDTH = (PANEL_WIDTH - 2*PANEL_SPACING) // 2
 
+DEFAULT_360_MODE = False
+PADDING_RATIO = 0.25
 
 track_id_color_palette = [
             (0, 255, 0),    # Green
