@@ -967,84 +967,68 @@ class VideoCanvas(QLabel):
         return True
 
     def get_simple_mirrors(self, bbox):
-        """올바른 360도 미러링 (최종 버전)"""
+        """360도 미러링"""
         if not self.is_360_mode:
             return []
         
         mirrors = []
-        padding_width = int(self.original_width * self.padding_ratio)  # 960
+        padding_width = int(self.original_width * self.padding_ratio)
         
         x = bbox['x']
         y = bbox['y']
         width = bbox['width']
         height = bbox['height']
         
-        print(f"360° Mirror: x={x}, padding={padding_width}")
+        # Define Area
+        main_start = padding_width
+        main_end = padding_width + self.original_width
         
-        # 360도 핵심 개념: 
-        # - 왼쪽 패딩(0~960)은 원본 이미지 오른쪽 끝(2880~3840)의 복사본
-        # - 오른쪽 패딩(4800~5760)은 원본 이미지 왼쪽 끝(0~960)의 복사본
-        
-        # 1. 왼쪽 패딩 영역 → 메인 영역 오른쪽 끝에 미러
         if x < padding_width:
-            # 왼쪽 패딩에서의 위치를 메인 영역 오른쪽 끝으로 매핑
-            # x=775 → 메인 영역에서 (3840-960+775) = 3655 위치
-            offset_in_padding = x  # 패딩 시작점에서의 거리
-            mirror_x = padding_width + (self.original_width - padding_width) + offset_in_padding
-            # 즉: 960 + (3840-960) + 775 = 960 + 2880 + 775 = 4615
-            
-            mirror = {
+            offset = x
+            mirror_x = main_end - padding_width + offset
+            mirrors.append({
                 'x': mirror_x, 'y': y, 'width': width, 'height': height,
-                'object_type': bbox.get('object_type', ''), 'track_id': bbox.get('track_id', '')
-            }
-            mirrors.append(mirror)
-            print(f"✅ Left padding → Main right end: {x} → {mirror_x}")
-        
-        # 2. 오른쪽 패딩 영역 → 메인 영역 왼쪽 시작에 미러
-        elif x >= (padding_width + self.original_width):
-            # 오른쪽 패딩에서의 상대 위치를 메인 영역 왼쪽 시작으로 매핑
-            offset_in_right_padding = x - (padding_width + self.original_width)
-            mirror_x = padding_width + offset_in_right_padding
-            
-            mirror = {
+                'object_type': bbox.get('object_type', ''),
+                'track_id': bbox.get('track_id', '')
+            })
+        elif x >= main_end:
+            offset = x - main_end
+            mirror_x = main_start + offset
+            mirrors.append({
                 'x': mirror_x, 'y': y, 'width': width, 'height': height,
-                'object_type': bbox.get('object_type', ''), 'track_id': bbox.get('track_id', '')
-            }
-            mirrors.append(mirror)
-            print(f"✅ Right padding → Main left start: {x} → {mirror_x}")
-        
-        # 3. 메인 영역 경계 근처 → 패딩 영역에 미러 (양방향)
-        elif x >= padding_width and (x + width) <= (padding_width + self.original_width):
-            main_start = padding_width  # 960
-            main_end = padding_width + self.original_width  # 4800
-            
-            distance_from_left = x - main_start
-            distance_from_right = main_end - (x + width)
-            
-            # 메인 영역 왼쪽 끝 → 왼쪽 패딩에 미러
-            if distance_from_left < padding_width:  # 960픽셀 이내
-                mirror_x = distance_from_left
-                mirror = {
+                'object_type': bbox.get('object_type', ''),
+                'track_id': bbox.get('track_id', '')
+            })
+        elif x >= main_start and x < main_end:
+            if x - main_start < padding_width:
+                mirror_x = main_end + (x - main_start)
+                mirrors.append({
                     'x': mirror_x, 'y': y, 'width': width, 'height': height,
-                    'object_type': bbox.get('object_type', ''), 'track_id': bbox.get('track_id', '')
-                }
-                mirrors.append(mirror)
-                print(f"✅ Main left → Left padding: {x} → {mirror_x}")
-            
-            # 메인 영역 오른쪽 끝 → 오른쪽 패딩에 미러
-            if distance_from_right < padding_width:  # 960픽셀 이내
-                mirror_x = main_end + distance_from_right
-                mirror = {
+                    'object_type': bbox.get('object_type', ''),
+                    'track_id': bbox.get('track_id', '')
+                })
+            if main_end - (x + width) < padding_width:
+                mirror_x = padding_width - (main_end - x)
+                mirrors.append({
                     'x': mirror_x, 'y': y, 'width': width, 'height': height,
-                    'object_type': bbox.get('object_type', ''), 'track_id': bbox.get('track_id', '')
-                }
-                mirrors.append(mirror)
-                print(f"✅ Main right → Right padding: {x} → {mirror_x}")
-            
-            if distance_from_left >= padding_width and distance_from_right >= padding_width:
-                print(f"❌ Main center, no mirrors needed")
+                    'object_type': bbox.get('object_type', ''),
+                    'track_id': bbox.get('track_id', '')
+                })
+        if x < main_start and (x + width) > main_start:
+            main_part_width = (x + width) - main_start
+            mirrors.append({
+                'x': mirror_x, 'y': y, 'width': main_part_width, 'height': height,
+                'object_type': bbox.get('object_type', ''),
+                'track_id': bbox.get('track_id', '')
+            })
+        elif x < main_end and (x + width) > main_end:
+            main_part_width = main_end - x
+            mirrors.append({
+                'x': 0, 'y': y, 'width': main_part_width, 'height': height,
+                'object_type': bbox.get('object_type', ''),
+                'track_id': bbox.get('track_id', '')
+            })
         
-        print(f"Generated {len(mirrors)} final mirrors")
         return mirrors
 
     def draw_single_bbox_simple(self, painter, bbox, color, is_selected=False, is_original=True):
