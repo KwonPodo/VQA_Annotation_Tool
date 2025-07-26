@@ -378,6 +378,8 @@ class MainWindow(QMainWindow):
                 self.auto_detect_360_mode()
 
                 self.update_annotation_status(f"Video loaded: {self.current_video_name}")
+
+                self.setFocus()
             else:
                 print(f"Failed to load video: {file_path}")
     
