@@ -820,7 +820,7 @@ class VideoCanvas(QLabel):
         if not painter.isActive():
             return
         
-        print(f"Drawing bboxes for frame {self.current_frame}: {len(self.frame_bboxes[self.current_frame])} boxes")
+        # print(f"Drawing bboxes for frame {self.current_frame}: {len(self.frame_bboxes[self.current_frame])} boxes")
         
         for i, bbox in enumerate(self.frame_bboxes[self.current_frame]):
             # 색상 설정
@@ -831,7 +831,7 @@ class VideoCanvas(QLabel):
 
             is_selected = (self.selected_bbox_index == i)
             
-            print(f"Drawing original box {i}: {bbox['track_id']} at ({bbox['x']}, {bbox['y']})")
+            # print(f"Drawing original box {i}: {bbox['track_id']} at ({bbox['x']}, {bbox['y']})")
             
             # 원본 박스 그리기
             self.draw_single_bbox_simple(painter, bbox, color, is_selected, is_original=True)
@@ -841,7 +841,7 @@ class VideoCanvas(QLabel):
                 mirrors = self.get_simple_mirrors(bbox)
                 print(f"Found {len(mirrors)} mirrors for box {i}")
                 for j, mirror in enumerate(mirrors):
-                    print(f"Drawing mirror {j}: at ({mirror['x']}, {mirror['y']})")
+                    # print(f"Drawing mirror {j}: at ({mirror['x']}, {mirror['y']})")
                     self.draw_single_bbox_simple(painter, mirror, color, False, is_original=False)
 
     def canvas_to_padded_coords(self, canvas_point):
