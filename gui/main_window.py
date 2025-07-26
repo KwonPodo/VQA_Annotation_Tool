@@ -403,6 +403,7 @@ class MainWindow(QMainWindow):
         self.video_canvas.selected_bbox = None
         self.video_canvas.selected_bbox_index = None
         self.video_canvas.is_drawing = False
+        self.video_canvas.last_selected_object_type = None
         self.video_canvas.update()
 
         # 4. Reset Object Panel
@@ -637,6 +638,7 @@ class MainWindow(QMainWindow):
         self.video_canvas.existing_track_ids = {}
         self.video_canvas.track_registry = {}
         self.video_canvas.color_index = 0
+        self.video_canvas.last_selected_object_type = None
         self.video_canvas.update()  # Refresh display
         
         # Reset navigation
@@ -938,6 +940,7 @@ class MainWindow(QMainWindow):
         self.video_canvas.selected_bbox = None
         self.video_canvas.selected_bbox_index = None
         self.video_canvas.is_drawing = False
+        self.video_canvas.last_selected_object_type = None
         self.video_canvas.update()
         
         # 4. Reset Annotation panel (Keep object panel)

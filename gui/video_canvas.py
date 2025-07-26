@@ -52,6 +52,9 @@ class VideoCanvas(QLabel):
         self.color_palette = track_id_color_palette
         self.color_index = 0
 
+        # Remember last selected object type
+        self.last_selected_object_type = None
+
 
         # BBox Edit State
         self.edit_mode = False
@@ -919,12 +922,14 @@ class VideoCanvas(QLabel):
             available_objects=self.available_objects,
             existing_track_ids=self.existing_track_ids.copy(),
             current_frame_track_ids=current_frame_track_ids,
+            last_selected_object=self.last_selected_object_type,
             parent=self
         )
         
         if dialog.exec() == QDialog.Accepted:
             object_type, track_id = dialog.get_annotation_result()
             if object_type and track_id:
+                self.last_selected_object_type = object_type
                 self.add_simple_bbox(x, y, width, height, object_type, track_id)
                 return True
         return False

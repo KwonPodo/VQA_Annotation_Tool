@@ -29,7 +29,7 @@ class CustomSpinBox(QSpinBox):
 class BBoxAnnotationDialog(QDialog):
     """Dialog for annotating bounding box with object type and track ID"""
     
-    def __init__(self, available_objects, existing_track_ids=None, current_frame_track_ids=None, parent=None):
+    def __init__(self, available_objects, existing_track_ids=None, current_frame_track_ids=None, last_selected_object=None, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Annotate Bounding Box")
         self.setModal(True)
@@ -38,6 +38,7 @@ class BBoxAnnotationDialog(QDialog):
         self.available_objects = available_objects
         self.existing_track_ids = existing_track_ids or {}
         self.current_frame_track_ids = current_frame_track_ids or []
+        self.last_selected_object = last_selected_object
         
         self.result_object_type = None
         self.result_track_id = None
@@ -110,9 +111,12 @@ class BBoxAnnotationDialog(QDialog):
         button_layout.addWidget(self.cancel_button)
         
         layout.addLayout(button_layout)
-        
-        # Initialize with first object
-        if self.available_objects:
+
+        if self.last_selected_object and self.last_selected_object in self.available_objects:
+            index = self.available_objects.index(self.last_selected_object)
+            self.object_combo.setCurrentIndex(index)
+            self.on_object_changed(self.last_selected_object)
+        elif self.available_objects:
             self.on_object_changed(self.available_objects[0])
         
         self.track_number_spinbox.setFocus()
