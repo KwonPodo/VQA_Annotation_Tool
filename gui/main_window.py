@@ -784,9 +784,9 @@ class MainWindow(QMainWindow):
             frame_num = self.sampled_frames[self.current_segment_index]
             self.video_canvas.set_frame(frame_num)
             self.update_frame_info()
-            print(
-                f"Navigated to segment {self.current_segment_index} of {len(self.sampled_frames) - 1} (frame {frame_num})"
-            )
+            # print(
+                # f"Navigated to segment {self.current_segment_index} of {len(self.sampled_frames) - 1} (frame {frame_num})"
+            # )
 
     def next_segment(self):
         """Go to next segment"""
@@ -798,9 +798,9 @@ class MainWindow(QMainWindow):
             frame_num = self.sampled_frames[self.current_segment_index]
             self.video_canvas.set_frame(frame_num)
             self.update_frame_info()
-            print(
-                f"Navigated to segment {self.current_segment_index} of {len(self.sampled_frames) - 1} (frame {frame_num})"
-            )
+            # print(
+            #     f"Navigated to segment {self.current_segment_index} of {len(self.sampled_frames) - 1} (frame {frame_num})"
+            # )
 
     def apply_time_segment_and_start(self):
         """Apply time segment and automatically start BBox Annotation"""
@@ -981,16 +981,12 @@ class MainWindow(QMainWindow):
         """Restore Selected Objects"""
         self.object_panel.clear_selection()
         
+        for category in selected_objects:
+            self.object_panel.all_selected_categories.add(category)
+        
         for category, checkbox in self.object_panel.checkboxes.items():
             if category in selected_objects:
                 checkbox.setChecked(True)
-        
-        self.on_object_selection_changed()
-        
-        if selected_objects:
-            self.update_annotation_status(f"Ready to restart with: {', '.join(selected_objects)}")
-        else:
-            self.update_annotation_status("Select objects to start annotation")
 
     def update_annotation_status(self, message):
         """Update annotation status label"""

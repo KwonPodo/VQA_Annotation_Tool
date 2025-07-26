@@ -660,7 +660,7 @@ class VideoCanvas(QLabel):
         end_padded = self.canvas_to_padded_coords(self.end_point)
         
         if start_padded and end_padded:
-            print(f"Drawing BBox: {start_padded} -> {end_padded}")
+            # print(f"Drawing BBox: {start_padded} -> {end_padded}")
             
             # 간단한 BBox 생성
             start_x, start_y = start_padded
@@ -839,7 +839,7 @@ class VideoCanvas(QLabel):
             # 360도 모드에서만 미러 박스 그리기
             if self.is_360_mode:
                 mirrors = self.get_simple_mirrors(bbox)
-                print(f"Found {len(mirrors)} mirrors for box {i}")
+                # print(f"Found {len(mirrors)} mirrors for box {i}")
                 for j, mirror in enumerate(mirrors):
                     # print(f"Drawing mirror {j}: at ({mirror['x']}, {mirror['y']})")
                     self.draw_single_bbox_simple(painter, mirror, color, False, is_original=False)
@@ -936,7 +936,7 @@ class VideoCanvas(QLabel):
 
     def add_simple_bbox(self, x, y, width, height, object_type, track_id):
         """간단한 BBox 추가 (새로운 함수)"""
-        print(f"Adding simple bbox: {object_type}-{track_id} at ({x}, {y}) size {width}x{height}")
+        # print(f"Adding simple bbox: {object_type}-{track_id} at ({x}, {y}) size {width}x{height}")
         
         # 색상 할당
         if track_id not in self.track_registry:
@@ -965,7 +965,7 @@ class VideoCanvas(QLabel):
         if track_id not in self.existing_track_ids[object_type]:
             self.existing_track_ids[object_type].append(track_id)
         
-        print(f'Successfully added bbox: {object_type}-{track_id}')
+        # print(f'Successfully added bbox: {object_type}-{track_id}')
         self.update()
         self.notify_progress_update()
         
@@ -1042,14 +1042,14 @@ class VideoCanvas(QLabel):
         bbox_x, bbox_y = bbox['x'], bbox['y']
         bbox_w, bbox_h = bbox['width'], bbox['height']
         
-        print(f"Drawing {'original' if is_original else 'mirror'} box at padded coords: ({bbox_x}, {bbox_y}) size {bbox_w}x{bbox_h}")
+        # print(f"Drawing {'original' if is_original else 'mirror'} box at padded coords: ({bbox_x}, {bbox_y}) size {bbox_w}x{bbox_h}")
         
         # 패딩 좌표를 캔버스 좌표로 변환
         top_left = self.padded_to_canvas_coords((bbox_x, bbox_y))
         bottom_right = self.padded_to_canvas_coords((bbox_x + bbox_w, bbox_y + bbox_h))
         
         if not top_left or not bottom_right:
-            print(f"❌ Coordinate conversion failed for {'original' if is_original else 'mirror'}")
+            # print(f"❌ Coordinate conversion failed for {'original' if is_original else 'mirror'}")
             return
         
         canvas_x1, canvas_y1 = top_left
@@ -1057,17 +1057,17 @@ class VideoCanvas(QLabel):
         canvas_w = canvas_x2 - canvas_x1
         canvas_h = canvas_y2 - canvas_y1
         
-        print(f"  → Canvas coords: ({canvas_x1}, {canvas_y1}) to ({canvas_x2}, {canvas_y2}) = {canvas_w}x{canvas_h}")
+        # print(f"  → Canvas coords: ({canvas_x1}, {canvas_y1}) to ({canvas_x2}, {canvas_y2}) = {canvas_w}x{canvas_h}")
         
         # 화면 범위 체크
         canvas_rect = self.rect()
         visible = (canvas_x2 > 0 and canvas_x1 < canvas_rect.width() and 
                 canvas_y2 > 0 and canvas_y1 < canvas_rect.height())
         
-        print(f"  → Visible: {visible} (canvas size: {canvas_rect.width()}x{canvas_rect.height()})")
+        # print(f"  → Visible: {visible} (canvas size: {canvas_rect.width()}x{canvas_rect.height()})")
         
         if not visible:
-            print(f"  → Box is outside visible area!")
+            # print(f"  → Box is outside visible area!")
             return
         
         # 스타일 설정
@@ -1100,7 +1100,7 @@ class VideoCanvas(QLabel):
         if is_selected and is_original:
             self.draw_resize_handles(painter, top_left, bottom_right, color.lighter(150))
         
-        print(f"  → Successfully drew {'original' if is_original else 'MIRROR'} box")
+        # print(f"  → Successfully drew {'original' if is_original else 'MIRROR'} box")
 
     def convert_padded_to_original_coords(self, bbox):
         """저장용: 패딩 좌표를 원본 영상 좌표로 변환"""
@@ -1124,8 +1124,8 @@ class VideoCanvas(QLabel):
         padded_width = bbox['width']
         padded_height = bbox['height']
         
-        print(f"Converting padded ({padded_x}, {padded_y}) w={padded_width} h={padded_height}")
-        print(f"Padding areas: Left[0~{padding_width}] Main[{padding_width}~{padding_width + self.original_width}] Right[{padding_width + self.original_width}~{padding_width + self.original_width + padding_width}]")
+        # print(f"Converting padded ({padded_x}, {padded_y}) w={padded_width} h={padded_height}")
+        # print(f"Padding areas: Left[0~{padding_width}] Main[{padding_width}~{padding_width + self.original_width}] Right[{padding_width + self.original_width}~{padding_width + self.original_width + padding_width}]")
         
         # 1. 왼쪽 패딩 영역 (0 ~ 960) → 원본 오른쪽 끝으로 매핑
         if padded_x < padding_width:
@@ -1140,12 +1140,12 @@ class VideoCanvas(QLabel):
                 overflow_into_main = (padded_x + padded_width) - padding_width
                 original_width = (padding_width - padded_x) + overflow_into_main
                 is_boundary_box = True
-                print(f"  → Boundary box: starts at right end ({original_x}), crosses to left")
+                # print(f"  → Boundary box: starts at right end ({original_x}), crosses to left")
             else:
                 # 패딩 영역 내에만 있는 박스
                 original_width = padded_width
                 is_boundary_box = False
-                print(f"  → Left padding → Right end: {padded_x} → {original_x}")
+                # print(f"  → Left padding → Right end: {padded_x} → {original_x}")
         
         # 2. 메인 영역 (960 ~ 4800) → 원본 좌표 (0 ~ 3840)
         elif padded_x >= padding_width and padded_x < (padding_width + self.original_width):
@@ -1157,7 +1157,7 @@ class VideoCanvas(QLabel):
             original_width = min(padded_width, max_width)
             is_boundary_box = False
             
-            print(f"  → Main area: {padded_x} → {original_x}")
+            # print(f"  → Main area: {padded_x} → {original_x}")
         
         # 3. 오른쪽 패딩 영역 (4800 ~ 5760) → 원본 왼쪽 시작으로 매핑
         else:
@@ -1167,7 +1167,7 @@ class VideoCanvas(QLabel):
             original_width = padded_width
             is_boundary_box = True
             
-            print(f"  → Right padding → Left start: {padded_x} → {original_x}")
+            # print(f"  → Right padding → Left start: {padded_x} → {original_x}")
         
         # 경계 체크 및 보정
         original_x = max(0, min(original_x, self.original_width - 1))
@@ -1186,7 +1186,7 @@ class VideoCanvas(QLabel):
             'is_boundary_box': is_boundary_box
         }
         
-        print(f"  → Final original coords: ({original_x}, {original_y}) w={original_width} h={original_height}")
+        # print(f"  → Final original coords: ({original_x}, {original_y}) w={original_width} h={original_height}")
         return result
 
     def calculate_bfov_from_original_coords(self, original_bbox):
@@ -1200,19 +1200,19 @@ class VideoCanvas(QLabel):
         width = original_bbox['width']
         height = original_bbox['height']
         
-        print(f"Calculating BFoV for original coords: ({x}, {y}) w={width} h={height}")
+        # print(f"Calculating BFoV for original coords: ({x}, {y}) w={width} h={height}")
         
         # 중심점 계산
         center_x = x + width / 2
         center_y = y + height / 2
         
-        print(f"  → Center point: ({center_x}, {center_y})")
+        # print(f"  → Center point: ({center_x}, {center_y})")
         
         # 정규화 좌표 (0~1 범위)
         norm_x = center_x / self.original_width
         norm_y = center_y / self.original_height
         
-        print(f"  → Normalized: ({norm_x:.4f}, {norm_y:.4f})")
+        # print(f"  → Normalized: ({norm_x:.4f}, {norm_y:.4f})")
         
         # 구면 좌표로 변환 (라디안)
         # φ (경도/longitude): -π ~ π 
@@ -1239,8 +1239,8 @@ class VideoCanvas(QLabel):
         elif phi_deg < -180:
             phi_deg += 360
         
-        print(f"  → Spherical coords: φ={phi_deg:.2f}°, θ={theta_deg:.2f}°")
-        print(f"  → Angular size: {width_angle_deg:.2f}° x {height_angle_deg:.2f}°")
+        # print(f"  → Spherical coords: φ={phi_deg:.2f}°, θ={theta_deg:.2f}°")
+        # print(f"  → Angular size: {width_angle_deg:.2f}° x {height_angle_deg:.2f}°")
         
         # BFoV 데이터 생성 (논문 형식)
         bfov_data = {
@@ -1363,12 +1363,12 @@ class VideoCanvas(QLabel):
                     'width_angle_degrees': bfov_data['width_angle_degrees']
                 }
         
-        print(f"Converted for save: {bbox['track_id']}")
-        print(f"  Pixel: ({save_data['pixel_coords']['x']}, {save_data['pixel_coords']['y']}) "
-            f"{save_data['pixel_coords']['width']}x{save_data['pixel_coords']['height']}")
-        if bfov_data:
-            print(f"  BFoV: φ={bfov_data['phi_degrees']:.1f}°, θ={bfov_data['theta_degrees']:.1f}°, "
-                f"size={bfov_data['width_angle_degrees']:.1f}°x{bfov_data['height_angle_degrees']:.1f}°")
+        # print(f"Converted for save: {bbox['track_id']}")
+        # print(f"  Pixel: ({save_data['pixel_coords']['x']}, {save_data['pixel_coords']['y']}) "
+            # f"{save_data['pixel_coords']['width']}x{save_data['pixel_coords']['height']}")
+        # if bfov_data:
+            # print(f"  BFoV: φ={bfov_data['phi_degrees']:.1f}°, θ={bfov_data['theta_degrees']:.1f}°, "
+                # f"size={bfov_data['width_angle_degrees']:.1f}°x{bfov_data['height_angle_degrees']:.1f}°")
         
         return save_data
 

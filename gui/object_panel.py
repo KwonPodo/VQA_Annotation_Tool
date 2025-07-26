@@ -36,6 +36,7 @@ class ObjectPanel(QGroupBox):
 
         # Init Callbacks
         self.selection_changed_callback = None
+        self.all_selected_categories = set()
 
         # 상단: 검색 및 커스텀 객체 추가
         top_section = self.create_top_section()
@@ -177,10 +178,12 @@ class ObjectPanel(QGroupBox):
 
     def update_checkbox_list(self):
         """체크박스 목록 업데이트 (검색 필터링 적용)"""
-        selected_states = {}
         for category, checkbox in self.checkboxes.items():
             try:
-                selected_states[category] = checkbox.isChecked()
+                if checkbox.isChecked():
+                    self.all_selected_categories.add(category)
+                else:
+                    self.all_selected_categories.discard(category)
             except RuntimeError:
                 continue
 
@@ -209,9 +212,11 @@ class ObjectPanel(QGroupBox):
             for i, category in enumerate(original_filtered):
                 checkbox = QCheckBox(category)
                 
+                checkbox.blockSignals(True)
                 # 이전 선택 상태 복원
-                if category in selected_states:
-                    checkbox.setChecked(selected_states[category])
+                if category in self.all_selected_categories:
+                    checkbox.setChecked(True)
+                checkbox.blockSignals(False)
                 
                 col = i % 3  # 3열로 변경 (더 많은 객체 표시)
                 current_row = row + i // 3
@@ -237,8 +242,10 @@ class ObjectPanel(QGroupBox):
                 checkbox = QCheckBox(category)
                 
                 # 이전 선택 상태 복원
-                if category in selected_states:
-                    checkbox.setChecked(selected_states[category])
+                checkbox.blockSignals(True)
+                if category in self.all_selected_categories:
+                    checkbox.setChecked(True)
+                checkbox.blockSignals(False)
 
                 remove_btn = QPushButton("×")
                 remove_btn.setFixedSize(20, 20)
@@ -272,10 +279,10 @@ class ObjectPanel(QGroupBox):
         self.checkbox_widget.updateGeometry()
 
         # 콜백 연결
-        if self.selection_changed_callback is not None:
-            for checkbox in self.checkboxes.values():
+        for checkbox in self.checkboxes.values():
+            checkbox.stateChanged.connect(self.update_selected_objects_display)
+            if self.selection_changed_callback is not None:
                 checkbox.stateChanged.connect(self.selection_changed_callback)
-                checkbox.stateChanged.connect(self.update_selected_objects_display)
 
         # 선택된 객체 표시 업데이트
         self.update_selected_objects_display()
@@ -337,11 +344,18 @@ class ObjectPanel(QGroupBox):
         selected = []
         for category, checkbox in self.checkboxes.items():
             if checkbox.isChecked():
-                selected.append(category)
-        return selected
+                self.all_selected_categories.add(category)
+                # selected.append(category)
+            else:
+                self.all_selected_categories.discard(category)
+
+        all_categories = set(self.get_all_categories())
+
+        return sorted(list(self.all_selected_categories & all_categories))
 
     def clear_selection(self):
         """Clear all selections"""
+        self.all_selected_categories.clear()
         for checkbox in self.checkboxes.values():
             checkbox.setChecked(False)
         self.update_selected_objects_display()
@@ -353,7 +367,3 @@ class ObjectPanel(QGroupBox):
     def connect_selection_changed(self, callback):
         """Connect selection changed callback"""
         self.selection_changed_callback = callback
-
-        for checkbox in self.checkboxes.values():
-            checkbox.stateChanged.connect(callback)
-            checkbox.stateChanged.connect(self.update_selected_objects_display)
