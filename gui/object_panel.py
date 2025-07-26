@@ -177,16 +177,18 @@ class ObjectPanel(QGroupBox):
 
     def update_checkbox_list(self):
         """체크박스 목록 업데이트 (검색 필터링 적용)"""
+        selected_states = {}
+        for category, checkbox in self.checkboxes.items():
+            try:
+                selected_states[category] = checkbox.isChecked()
+            except RuntimeError:
+                continue
+
         # 기존 체크박스 제거
         for i in reversed(range(self.checkbox_layout.count())):
             child = self.checkbox_layout.itemAt(i)
             if child and child.widget():
                 child.widget().setParent(None)
-
-        # 선택 상태 백업
-        selected_states = {}
-        for category, checkbox in self.checkboxes.items():
-            selected_states[category] = checkbox.isChecked()
 
         self.checkboxes.clear()
 
