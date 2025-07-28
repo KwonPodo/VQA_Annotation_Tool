@@ -4,7 +4,7 @@ Bounding Box Annotation Dialog with Manual Track ID Selection
 
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, 
                             QLabel, QComboBox, QLineEdit, 
-                            QPushButton, QMessageBox, QSpinBox)
+                            QPushButton, QMessageBox, QSpinBox, QCheckBox)
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QKeySequence, QShortcut
 
@@ -48,6 +48,7 @@ class BBoxAnnotationDialog(QDialog):
         
         self.result_object_type = None
         self.result_track_id = None
+        self.result_is_static = False
         
         self.setup_ui()
         self.setup_shortcuts()
@@ -103,6 +104,13 @@ class BBoxAnnotationDialog(QDialog):
         track_layout.addWidget(self.track_full_display)
         
         layout.addLayout(track_layout)
+
+        # Static Object Checkbox
+        static_layout = QHBoxLayout()
+        self.static_checkbox = QCheckBox("Static")
+        self.static_checkbox.setToolTip("Check if the object stays in the same position across all frames")
+        static_layout.addWidget(self.static_checkbox)
+        layout.addLayout(static_layout)
         
         # Buttons
         button_layout = QHBoxLayout()
@@ -250,9 +258,10 @@ class BBoxAnnotationDialog(QDialog):
             
         self.result_object_type = object_type
         self.result_track_id = track_id
+        self.result_is_static = self.static_checkbox.isChecked()
         
         self.accept()
     
     def get_annotation_result(self):
         """Get the annotation result"""
-        return self.result_object_type, self.result_track_id
+        return self.result_object_type, self.result_track_id, self.result_is_static

@@ -932,14 +932,69 @@ class VideoCanvas(QLabel):
         try:
             result = dialog.exec()
             if result == QDialog.Accepted:
-                object_type, track_id = dialog.get_annotation_result()
+                object_type, track_id, is_static = dialog.get_annotation_result()
                 if object_type and track_id:
                     self.last_selected_object_type = object_type
-                    self.add_simple_bbox(x, y, width, height, object_type, track_id)
+                    if is_static:
+                        self.add_static_bbox_to_all_segments(x, y, width, height, object_type, track_id)
+                    else:
+                        self.add_simple_bbox(x, y, width, height, object_type, track_id)
                     return True
         finally:
             dialog.deleteLater()
         return False
+
+    def add_static_bbox_to_all_segments(self, x, y, width, height, object_type, track_id):
+        """Add Static Object Bbox to all frame segments"""
+        
+        if track_id not in self.track_registry:
+            self.track_registry[track_id] = self.get_next_color()
+        
+        parent_widget = self.parent()
+        while parent_widget:
+            if hasattr(parent_widget, 'sampled_frames'):
+                sampled_frames = parent_widget.sampled_frames
+                break
+            parent_widget = parent_widget.parent()
+        else:
+            print("Warning: Could not find sampled frames, adding to current frame only")
+            self.add_simple_bbox(x, y, width, height, object_type, track_id)
+            return
+        
+        added_count = 0
+        for frame_idx in sampled_frames:
+            if frame_idx in self.frame_bboxes:
+                existing_track_ids = [bbox['track_id'] for bbox in self.frame_bboxes[frame_idx]]
+                if track_id in existing_track_ids:
+                    print(f"Skipping frame {frame_idx} - track_id {track_id} already exists")
+                    continue
+            
+            bbox = {
+                'x': x,
+                'y': y,
+                'width': width,
+                'height': height,
+                'object_type': object_type,
+                'track_id': track_id
+            }
+
+            if frame_idx not in self.frame_bboxes:
+                self.frame_bboxes[frame_idx] = []
+            
+            self.frame_bboxes[frame_idx].append(bbox)
+            added_count += 1
+        
+        if object_type not in self.existing_track_ids:
+            self.existing_track_ids[object_type] = []
+        
+        if track_id not in self.existing_track_ids[object_type]:
+            self.existing_track_ids[object_type].append(track_id)
+        
+        # print(f'Successfully added static bbox to {added_count} frames: {object_type}-{track_id}')
+        self.update()
+        self.notify_progress_update()
+        
+        return True
 
     def add_simple_bbox(self, x, y, width, height, object_type, track_id):
         """간단한 BBox 추가 (새로운 함수)"""
