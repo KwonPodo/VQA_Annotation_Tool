@@ -677,7 +677,7 @@ class MainWindow(QMainWindow):
         self.save_as_btn.setEnabled(False)
         
         # Update status
-        self.update_annotation_status("Ready for new grounding - Select objects and apply time segment")
+        self.update_annotation_status("Select objects and apply time segment")
         self.progress_label.setText("Progress: Ready for new grounding")
         self.progress_label.setStyleSheet(
             "color: #333; font-weight: bold; padding: 10px; "
