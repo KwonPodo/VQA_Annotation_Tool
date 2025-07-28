@@ -767,13 +767,35 @@ class MainWindow(QMainWindow):
 
     def prev_n_frame(self, n):
         """Go to previous n-frame"""
-        target_frame = max(0, self.video_canvas.current_frame - n)
+        if self.sampled_frames:
+            if self.sampled_frames:
+                min_frame = self.sampled_frames[0]
+                target_frame = max(min_frame, self.video_canvas.current_frame)
+
+                if target_frame < min_frame:
+                    target_frame = min_frame
+            else:
+                target_frame = max(0, self.video_canvas.current_frame - n)
+        else:
+            target_frame = max(0, self.video_canvas.current_frame - n)
+        
         if self.video_canvas.set_frame(target_frame):
             self.update_frame_info()
 
     def next_n_frame(self, n):
         """Go to next n-frame"""
-        target_frame = min(self.video_canvas.total_frames - 1, self.video_canvas.current_frame + n)
+        if self.sampled_frames:
+            if self.sampled_frames:
+                max_frame = self.sampled_frames[-1]
+                target_frame = min(max_frame, self.video_canvas.current_frame + n)
+                
+                if target_frame > max_frame:
+                    target_frame = max_frame
+            else:
+                target_frame = min(self.video_canvas.total_frames - 1, self.video_canvas.current_frame + n)
+        else:
+            target_frame = min(self.video_canvas.total_frames - 1, self.video_canvas.current_frame + n)
+        
         if self.video_canvas.set_frame(target_frame):
             self.update_frame_info()
 

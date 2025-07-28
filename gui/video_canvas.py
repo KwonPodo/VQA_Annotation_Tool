@@ -641,6 +641,9 @@ class VideoCanvas(QLabel):
         if not self.bbox_mode or event.button() != Qt.LeftButton:
             return
         
+        if not self.isVisible():
+            return
+
         # 새 박스 그리기 완료
         if self.is_drawing:
             self.complete_new_bbox_drawing()
@@ -926,12 +929,16 @@ class VideoCanvas(QLabel):
             parent=self
         )
         
-        if dialog.exec() == QDialog.Accepted:
-            object_type, track_id = dialog.get_annotation_result()
-            if object_type and track_id:
-                self.last_selected_object_type = object_type
-                self.add_simple_bbox(x, y, width, height, object_type, track_id)
-                return True
+        try:
+            result = dialog.exec()
+            if result == QDialog.Accepted:
+                object_type, track_id = dialog.get_annotation_result()
+                if object_type and track_id:
+                    self.last_selected_object_type = object_type
+                    self.add_simple_bbox(x, y, width, height, object_type, track_id)
+                    return True
+        finally:
+            dialog.deleteLater()
         return False
 
     def add_simple_bbox(self, x, y, width, height, object_type, track_id):

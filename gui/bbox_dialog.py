@@ -18,6 +18,10 @@ class CustomSpinBox(QSpinBox):
     
     def keyPressEvent(self, event):
         """Handle key events - pass special keys to dialog"""
+        if not self.parent_dialog:
+            super().keyPressEvent(event)
+            return
+
         # W/S/Enter/Space -> Dialog
         if event.key() in (Qt.Key_W, Qt.Key_S, Qt.Key_Return, Qt.Key_Enter, Qt.Key_Space, Qt.Key_Escape):
             self.parent_dialog.keyPressEvent(event)
@@ -34,6 +38,8 @@ class BBoxAnnotationDialog(QDialog):
         self.setWindowTitle("Annotate Bounding Box")
         self.setModal(True)
         self.setFixedSize(380, 150)
+
+        self.setAttribute(Qt.WA_DeleteOnClose, False)
         
         self.available_objects = available_objects
         self.existing_track_ids = existing_track_ids or {}
