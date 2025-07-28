@@ -1,6 +1,8 @@
 {
     "Object Identification": [
         "Identification",
+        "Location",
+        "Verification",
         "Attribute",
         "Status"
     ],
