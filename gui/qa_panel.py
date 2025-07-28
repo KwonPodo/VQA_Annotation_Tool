@@ -115,7 +115,6 @@ class QAPanel(QGroupBox):
         self.start_segment_spinbox.setMinimum(0)
         self.start_segment_spinbox.setMaximum(999)
         self.start_segment_spinbox.setValue(0)
-        self.start_segment_spinbox.setSuffix(" (index)")
         start_segment_layout.addWidget(self.start_segment_spinbox)
 
         ## End Segment Index
@@ -125,7 +124,6 @@ class QAPanel(QGroupBox):
         self.end_segment_spinbox.setMinimum(0)
         self.end_segment_spinbox.setMaximum(999)
         self.end_segment_spinbox.setValue(10)
-        self.end_segment_spinbox.setSuffix(" (index)")
         end_segment_layout.addWidget(self.end_segment_spinbox)
 
         ## Apply Button
@@ -640,7 +638,9 @@ class QAPanel(QGroupBox):
             max_idx = len(self.sampled_frames) - 1
             self.start_segment_spinbox.setMaximum(max_idx)
             self.end_segment_spinbox.setMaximum(max_idx)
-            self.end_segment_spinbox.setValue(min(10, max_idx))
+            self.end_segment_spinbox.setValue(max_idx)
         else:
             self.start_segment_spinbox.setMaximum(0)
             self.end_segment_spinbox.setMaximum(0)
+            self.start_segment_spinbox.setValue(0)
+            self.end_segment_spinbox.setValue(0)
