@@ -15,7 +15,8 @@ class AnnotationPanel(QGroupBox):
 
     def __init__(self):
         super().__init__("2. Annotation Controls")
-        self.setFixedWidth(HALF_PANEL_WIDTH)
+        self.setMinimumWidth(200)
+        self.setMaximumWidth(280)
         self.setMaximumHeight(480)
         layout = QVBoxLayout(self)
 
@@ -66,13 +67,11 @@ class AnnotationPanel(QGroupBox):
         
         self.apply_segment_btn.setMinimumWidth(30)
         self.apply_segment_btn.setMinimumHeight(35)
-        self.apply_segment_btn.setMaximumWidth(HALF_PANEL_WIDTH - 30)
 
         self.undo_segment_btn = QPushButton("Undo Time Segment")
         self.undo_segment_btn.setEnabled(False)
         self.undo_segment_btn.setMinimumWidth(30)
         self.undo_segment_btn.setMinimumHeight(35)
-        self.undo_segment_btn.setMaximumWidth(HALF_PANEL_WIDTH - 30)
 
 
         segment_layout.addLayout(start_layout)

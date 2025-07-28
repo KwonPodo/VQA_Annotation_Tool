@@ -28,7 +28,7 @@ from PySide6.QtWidgets import (
 from gui.annotation_panel import AnnotationPanel
 from gui.object_panel import ObjectPanel
 from gui.qa_panel import QAPanel
-from gui.config import PANEL_WIDTH, DEFAULT_360_MODE
+from gui.config import PANEL_WIDTH, DEFAULT_360_MODE, HALF_PANEL_WIDTH
 from gui.video_canvas import VideoCanvas
 
 
@@ -39,7 +39,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Video QA Annotation Tool")
-        self.setGeometry(100, 100, 1400, 700)
+        self.setGeometry(100, 100, 1450, 700)
 
         # Annotation State
         self.sampled_frames = []
@@ -67,21 +67,28 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central_widget)
 
         main_layout = QHBoxLayout(central_widget)
+        main_layout.setContentsMargins(5, 5, 5, 5)
 
         # Create main splitter
         main_splitter = QSplitter(Qt.Horizontal)
+        main_splitter.setHandleWidth(5)
 
         # Left panel (video canvas)
         left_panel = self.create_left_panel()
 
         # Right panel (controls)
         right_panel = self.create_right_panel()
+        right_panel.setFixedWidth(PANEL_WIDTH + 20)
 
         main_splitter.addWidget(left_panel)
         main_splitter.addWidget(right_panel)
 
-        # Set splitter proportions (left : video, right : panels)
-        main_splitter.setSizes([800, PANEL_WIDTH])
+        window_width = 1600
+        left_width = window_width - PANEL_WIDTH - 50
+        main_splitter.setSizes([left_width, PANEL_WIDTH + 20])
+
+        main_splitter.setStretchFactor(0, 1)
+        main_splitter.setStretchFactor(1, 0)
 
         main_layout.addWidget(main_splitter)
 
@@ -157,7 +164,11 @@ class MainWindow(QMainWindow):
     def create_right_panel(self):
         """Create right panel with tabbed annotation controls"""
         panel = QFrame()
+        panel.setFrameStyle(QFrame.StyledPanel)
+
         layout = QVBoxLayout(panel)
+        layout.setContentsMargins(5, 5, 5, 5)
+        layout.setSpacing(5)
 
         # Tab Widget
         self.tab_widget = QTabWidget()
@@ -182,6 +193,7 @@ class MainWindow(QMainWindow):
         tab = QWidget()
         layout = QVBoxLayout(tab)
         layout.setSpacing(10)
+        layout.setContentsMargins(5, 5, 5, 5)
         
         # Upper: Object Panel
         self.object_panel = ObjectPanel()
@@ -190,6 +202,7 @@ class MainWindow(QMainWindow):
         # Lower: Annotation Panel + Annoation Status Panel
         bottom_row_layout = QHBoxLayout()
         bottom_row_layout.setSpacing(10)
+        bottom_row_layout.setContentsMargins(0, 0, 0, 0)
         
         # Upper Left: Annotation controls panel
         self.annotation_panel = AnnotationPanel()
@@ -241,8 +254,8 @@ class MainWindow(QMainWindow):
         status_layout.addStretch()
         
         # 하단 가로 배치
-        bottom_row_layout.addWidget(self.annotation_panel)
-        bottom_row_layout.addWidget(status_group)
+        bottom_row_layout.addWidget(self.annotation_panel, 2)
+        bottom_row_layout.addWidget(status_group, 3)
         
         layout.addLayout(bottom_row_layout, 0)
         
@@ -1012,7 +1025,7 @@ class MainWindow(QMainWindow):
             self.progress_label.setText("Progress: No segments defined")
             self.progress_label.setStyleSheet(
                 "color: #666; padding: 10px; border: 2px solid #9E9E9E; "
-                "border-radius: 5px; background-color: #f5f5f5; font-size: 12px;"
+                "border-radius: 5px; background-color: #f5f5f5; font-size: 11px;"
             )
             return
         
@@ -1061,7 +1074,7 @@ class MainWindow(QMainWindow):
         self.progress_label.setStyleSheet(
             f"color: {color}; font-weight: bold; padding: 10px; "
             f"border: 2px solid {color}; border-radius: 5px; "
-            f"background-color: {bg_color}; font-size: 12px;"
+            f"background-color: {bg_color}; font-size: 11px;"
         )
 
     def switch_to_qa_tab(self):

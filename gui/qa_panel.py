@@ -17,7 +17,7 @@ class QAPanel(QGroupBox):
 
     def __init__(self):
         super().__init__("Question & Answer")
-        self.setMinimumWidth(PANEL_WIDTH - PANEL_SPACING * 2)
+        self.setFixedWidth(PANEL_WIDTH)
         
         # QA Data Management
         self.qa_sessions = []  # Save Several QAs

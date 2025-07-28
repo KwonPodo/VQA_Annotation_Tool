@@ -25,7 +25,7 @@ class ObjectPanel(QGroupBox):
 
     def __init__(self):
         super().__init__("1. Object Categories")
-        self.setFixedWidth(PANEL_WIDTH - 20)
+        self.setFixedWidth(PANEL_WIDTH)
 
         main_layout = QVBoxLayout(self)
 
