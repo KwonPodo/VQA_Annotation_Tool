@@ -310,24 +310,24 @@ class MainWindow(QMainWindow):
         """Setup keyboard shortcuts"""
 
         # C Mapping: Prev 1 Frame
-        self.d_shortcut = QShortcut(QKeySequence(Qt.Key_C), self)
-        self.d_shortcut.activated.connect(self.navigate_prev)
-        self.d_shortcut.setContext(Qt.WindowShortcut)
-
-        # V Mapping: Next 1 Frame
-        self.f_shortcut = QShortcut(QKeySequence(Qt.Key_V), self)
-        self.f_shortcut.activated.connect(self.navigate_next)
-        self.f_shortcut.setContext(Qt.WindowShortcut)
-
-        # D Mapping: Next 10 Frame
-        self.c_shortcut = QShortcut(QKeySequence(Qt.Key_D), self)
-        self.c_shortcut.activated.connect(lambda: self.prev_n_frame(10))
+        self.c_shortcut = QShortcut(QKeySequence(Qt.Key_C), self)
+        self.c_shortcut.activated.connect(self.navigate_prev)
         self.c_shortcut.setContext(Qt.WindowShortcut)
 
-        # F Mapping: Next 10 Frame
-        self.v_shortcut = QShortcut(QKeySequence(Qt.Key_F), self)
-        self.v_shortcut.activated.connect(lambda: self.next_n_frame(10))
+        # V Mapping: Next 1 Frame
+        self.v_shortcut = QShortcut(QKeySequence(Qt.Key_V), self)
+        self.v_shortcut.activated.connect(self.navigate_next)
         self.v_shortcut.setContext(Qt.WindowShortcut)
+
+        # D Mapping: Next 10 Frame
+        self.d_shortcut = QShortcut(QKeySequence(Qt.Key_D), self)
+        self.d_shortcut.activated.connect(lambda: self.prev_n_frame(10))
+        self.d_shortcut.setContext(Qt.WindowShortcut)
+
+        # F Mapping: Next 10 Frame
+        self.f_shortcut = QShortcut(QKeySequence(Qt.Key_F), self)
+        self.f_shortcut.activated.connect(lambda: self.next_n_frame(10))
+        self.f_shortcut.setContext(Qt.WindowShortcut)
 
         # A Mapping: Apply Time Segment
         self.a_shortcut = QShortcut(QKeySequence(Qt.Key_A), self)
@@ -768,14 +768,10 @@ class MainWindow(QMainWindow):
     def prev_n_frame(self, n):
         """Go to previous n-frame"""
         if self.sampled_frames:
-            if self.sampled_frames:
-                min_frame = self.sampled_frames[0]
-                target_frame = max(min_frame, self.video_canvas.current_frame)
+            min_frame = self.sampled_frames[0]
+            max_frame = self.sampled_frames[-1]
+            target_frame = max(min_frame, min(max_frame, self.video_canvas.current_frame - n))
 
-                if target_frame < min_frame:
-                    target_frame = min_frame
-            else:
-                target_frame = max(0, self.video_canvas.current_frame - n)
         else:
             target_frame = max(0, self.video_canvas.current_frame - n)
         
@@ -785,17 +781,13 @@ class MainWindow(QMainWindow):
     def next_n_frame(self, n):
         """Go to next n-frame"""
         if self.sampled_frames:
-            if self.sampled_frames:
-                max_frame = self.sampled_frames[-1]
-                target_frame = min(max_frame, self.video_canvas.current_frame + n)
-                
-                if target_frame > max_frame:
-                    target_frame = max_frame
-            else:
-                target_frame = min(self.video_canvas.total_frames - 1, self.video_canvas.current_frame + n)
+            min_frame = self.sampled_frames[0]
+            max_frame = self.sampled_frames[-1]
+            target_frame = max(min_frame, min(max_frame, self.video_canvas.current_frame + n))
+            
         else:
             target_frame = min(self.video_canvas.total_frames - 1, self.video_canvas.current_frame + n)
-        
+
         if self.video_canvas.set_frame(target_frame):
             self.update_frame_info()
 
