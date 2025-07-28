@@ -4,7 +4,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QWidget, QPushButton, QLabel,
     QGroupBox, QTextEdit, QComboBox, QCheckBox, QScrollArea,
-    QMessageBox, QGridLayout
+    QMessageBox, QGridLayout, QSpinBox
 )
 
 from gui.config import PANEL_WIDTH, PANEL_SPACING
@@ -103,6 +103,48 @@ class QAPanel(QGroupBox):
         # Time Segment Grounding for QAs
         temporal_group = QGroupBox('Time Segment Grounding')
         temporal_layout = QVBoxLayout(temporal_group)
+
+        # Time Segment Range UI
+        range_control_group = QGroupBox("Select Segment Range")
+        range_control_layout = QVBoxLayout(range_control_group)
+
+        ## Start Segment Index
+        start_segment_layout = QHBoxLayout()
+        start_segment_layout.addWidget(QLabel("Start Segment:"))
+        self.start_segment_spinbox = QSpinBox()
+        self.start_segment_spinbox.setMinimum(0)
+        self.start_segment_spinbox.setMaximum(999)
+        self.start_segment_spinbox.setValue(0)
+        self.start_segment_spinbox.setSuffix(" (index)")
+        start_segment_layout.addWidget(self.start_segment_spinbox)
+
+        ## End Segment Index
+        end_segment_layout = QHBoxLayout()
+        end_segment_layout.addWidget(QLabel("End Segment:"))
+        self.end_segment_spinbox = QSpinBox()
+        self.end_segment_spinbox.setMinimum(0)
+        self.end_segment_spinbox.setMaximum(999)
+        self.end_segment_spinbox.setValue(10)
+        self.end_segment_spinbox.setSuffix(" (index)")
+        end_segment_layout.addWidget(self.end_segment_spinbox)
+
+        ## Apply Button
+        apply_range_btn = QPushButton("Apply Range")
+        apply_range_btn.clicked.connect(self.apply_segment_range)
+
+        ## Clear All Button
+        clear_all_btn = QPushButton("Clear All")
+        clear_all_btn.clicked.connect(self.clear_all_segments)
+        ## Button Layout
+        range_button_layout = QHBoxLayout()
+        range_button_layout.addWidget(apply_range_btn)
+        range_button_layout.addWidget(clear_all_btn)
+
+        range_control_layout.addLayout(start_segment_layout)
+        range_control_layout.addLayout(end_segment_layout)
+        range_control_layout.addLayout(range_button_layout)
+
+        temporal_layout.addWidget(range_control_group)
 
         # Scroll Area for Time Segment Grounding
         temporal_scroll_area = QScrollArea()
@@ -265,6 +307,7 @@ class QAPanel(QGroupBox):
                 child.widget().setParent(None)
         
         self.temporal_checkboxes.clear()
+        self.update_segment_range_limits()
 
         if not hasattr(self, 'sampled_frames') or not self.sampled_frames:
             no_segments_label = QLabel("No segments available")
@@ -519,6 +562,13 @@ class QAPanel(QGroupBox):
         
         self.save_qa_btn.setEnabled(False)
         self.new_qa_btn.setEnabled(False)
+
+        if hasattr(self, 'start_segment_spinbox'):
+            self.start_segment_spinbox.setValue(0)
+            self.start_segment_spinbox.setMaximum(0)
+        if hasattr(self, 'end_segment_spinbox'):
+            self.end_segment_spinbox.setValue(0)
+            self.end_segment_spinbox.setMaximum(0)
     
     def question_key_press_event(self, event):
         """Tab Key for moving cursor from question -> answer"""
@@ -547,3 +597,50 @@ class QAPanel(QGroupBox):
             return
         
         QTextEdit.keyPressEvent(self.answer_input, event)
+    
+    def apply_segment_range(self):
+        """지정된 범위의 세그먼트들을 체크"""
+        if not hasattr(self, 'sampled_frames') or not self.sampled_frames:
+            QMessageBox.warning(self, "No Segments", "No segments available to select.")
+            return
+        
+        start_idx = self.start_segment_spinbox.value()
+        end_idx = self.end_segment_spinbox.value()
+        
+        # 유효성 검사
+        max_idx = len(self.sampled_frames) - 1
+        if start_idx > max_idx or end_idx > max_idx:
+            QMessageBox.warning(self, "Invalid Range", 
+                            f"Segment indices must be between 0 and {max_idx}")
+            return
+        
+        if start_idx > end_idx:
+            QMessageBox.warning(self, "Invalid Range", 
+                            "Start segment must be less than or equal to end segment")
+            return
+        
+        # 범위 내의 세그먼트 체크
+        checked_count = 0
+        for segment_idx in range(start_idx, end_idx + 1):
+            if segment_idx in self.temporal_checkboxes:
+                self.temporal_checkboxes[segment_idx].setChecked(True)
+                checked_count += 1
+        
+        # print(f"Checked {checked_count} segments from index {start_idx} to {end_idx}")
+
+    def clear_all_segments(self):
+        """모든 세그먼트 체크 해제"""
+        for checkbox in self.temporal_checkboxes.values():
+            checkbox.setChecked(False)
+        # print("Cleared all segment selections")
+
+    def update_segment_range_limits(self):
+        """세그먼트 범위 SpinBox의 최대값 업데이트"""
+        if hasattr(self, 'sampled_frames') and self.sampled_frames:
+            max_idx = len(self.sampled_frames) - 1
+            self.start_segment_spinbox.setMaximum(max_idx)
+            self.end_segment_spinbox.setMaximum(max_idx)
+            self.end_segment_spinbox.setValue(min(10, max_idx))
+        else:
+            self.start_segment_spinbox.setMaximum(0)
+            self.end_segment_spinbox.setMaximum(0)
