@@ -127,8 +127,8 @@ class MainWindow(QMainWindow):
 
         # Navigation buttons
         nav_layout = QHBoxLayout()
-        self.prev_frame_btn = QPushButton("◀ Previous Frame (D=1, C=10)")
-        self.next_frame_btn = QPushButton("Next Frame (F=1, V=10) ▶")
+        self.prev_frame_btn = QPushButton("◀ Previous Frame (D=10, C=1)")
+        self.next_frame_btn = QPushButton("Next Frame (F=10, V=1) ▶")
         nav_layout.addWidget(self.prev_frame_btn)
         nav_layout.addWidget(self.next_frame_btn)
 
@@ -309,23 +309,23 @@ class MainWindow(QMainWindow):
     def setup_keyboard_shortcuts(self):
         """Setup keyboard shortcuts"""
 
-        # D Mapping: Prev Frame
-        self.d_shortcut = QShortcut(QKeySequence(Qt.Key_D), self)
+        # C Mapping: Prev 1 Frame
+        self.d_shortcut = QShortcut(QKeySequence(Qt.Key_C), self)
         self.d_shortcut.activated.connect(self.navigate_prev)
         self.d_shortcut.setContext(Qt.WindowShortcut)
 
-        # F Mapping: Next Frame
-        self.f_shortcut = QShortcut(QKeySequence(Qt.Key_F), self)
+        # V Mapping: Next 1 Frame
+        self.f_shortcut = QShortcut(QKeySequence(Qt.Key_V), self)
         self.f_shortcut.activated.connect(self.navigate_next)
         self.f_shortcut.setContext(Qt.WindowShortcut)
 
-        # C Mapping: Next Frame
-        self.c_shortcut = QShortcut(QKeySequence(Qt.Key_C), self)
+        # D Mapping: Next 10 Frame
+        self.c_shortcut = QShortcut(QKeySequence(Qt.Key_D), self)
         self.c_shortcut.activated.connect(lambda: self.prev_n_frame(10))
         self.c_shortcut.setContext(Qt.WindowShortcut)
 
-        # V Mapping: Next Frame
-        self.v_shortcut = QShortcut(QKeySequence(Qt.Key_V), self)
+        # F Mapping: Next 10 Frame
+        self.v_shortcut = QShortcut(QKeySequence(Qt.Key_F), self)
         self.v_shortcut.activated.connect(lambda: self.next_n_frame(10))
         self.v_shortcut.setContext(Qt.WindowShortcut)
 
